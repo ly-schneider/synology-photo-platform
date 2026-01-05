@@ -1,0 +1,1 @@
+# Synology Photo Platform
