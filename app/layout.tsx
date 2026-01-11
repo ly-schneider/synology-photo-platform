@@ -1,4 +1,5 @@
 import ServiceWorker from "@/components/pwa/service-worker";
+import { A2HSNudge } from "@/components/pwa/a2hs-nudge";
 import { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
@@ -112,6 +113,7 @@ export default function RootLayout({
       <body className="bg-background text-foreground overflow-x-hidden flex flex-col min-h-screen">
         {children}
         <ServiceWorker />
+        <A2HSNudge />
       </body>
     </html>
   );
