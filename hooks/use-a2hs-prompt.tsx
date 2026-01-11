@@ -10,10 +10,22 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
+function isIOSSafari(): boolean {
+  if (typeof window === "undefined") return false;
+  const ua = window.navigator.userAgent;
+  const isIOS = /iPad|iPhone|iPod/.test(ua);
+  const isWebkit = /WebKit/.test(ua);
+  const isChrome = /CriOS/.test(ua);
+  const isFirefox = /FxiOS/.test(ua);
+  // iOS Safari is WebKit-based but not Chrome or Firefox on iOS
+  return isIOS && isWebkit && !isChrome && !isFirefox;
+}
+
 export function useA2HSPrompt() {
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [shouldShowNudge, setShouldShowNudge] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
     // Check if the prompt has been seen before
@@ -23,20 +35,29 @@ export function useA2HSPrompt() {
       return;
     }
 
-    // Check if app is already installed
+    // Check if app is already installed (standalone mode)
     if (window.matchMedia("(display-mode: standalone)").matches) {
-      // App is already installed
       setCookie(A2HS_COOKIE_NAME, "true", COOKIE_EXPIRY_DAYS);
       return;
     }
 
-    // Listen for the beforeinstallprompt event
+    // Check for iOS standalone mode (navigator.standalone is iOS-specific)
+    if ((navigator as Navigator & { standalone?: boolean }).standalone === true) {
+      setCookie(A2HS_COOKIE_NAME, "true", COOKIE_EXPIRY_DAYS);
+      return;
+    }
+
+    // Check if iOS Safari - show nudge with manual instructions
+    if (isIOSSafari()) {
+      setIsIOS(true);
+      setShouldShowNudge(true);
+      return;
+    }
+
+    // For other browsers, listen for the beforeinstallprompt event
     const handleBeforeInstallPrompt = (e: Event) => {
-      // Prevent the mini-infobar from appearing on mobile
       e.preventDefault();
-      // Stash the event so it can be triggered later
       setDeferredPrompt(e as BeforeInstallPromptEvent);
-      // Show our custom nudge
       setShouldShowNudge(true);
     };
 
@@ -82,6 +103,7 @@ export function useA2HSPrompt() {
     showInstallPrompt,
     dismissNudge,
     canInstall: !!deferredPrompt,
+    isIOS,
   };
 }
 
