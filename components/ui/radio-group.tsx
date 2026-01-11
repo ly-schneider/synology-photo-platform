@@ -1,7 +1,8 @@
 "use client";
 
 import * as RadioGroupPrimitive from "@radix-ui/react-radio-group";
-import { Circle } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { CircleIcon } from "@hugeicons/core-free-icons";
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
@@ -34,7 +35,7 @@ const RadioGroupItem = React.forwardRef<
       {...props}
     >
       <RadioGroupPrimitive.Indicator className="flex items-center justify-center">
-        <Circle className="h-2.5 w-2.5 fill-current text-current" />
+        <HugeiconsIcon icon={CircleIcon} className="h-2.5 w-2.5 text-current" />
       </RadioGroupPrimitive.Indicator>
     </RadioGroupPrimitive.Item>
   );

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { handleApiError, notFound } from "@/lib/api/errors";
 import type { Item } from "@/lib/api/proxyUtils";
-import { synoCallJson } from "@/lib/synology/client";
+import { fetchVisibleItemInfo } from "@/lib/api/itemInfo";
 
 type SynoItem = Record<string, unknown>;
 
@@ -15,20 +15,12 @@ export async function GET(
     const query = request.nextUrl.searchParams;
     const origin = request.nextUrl.origin;
 
-    const synoParams: Record<string, unknown> = {
-      ...Object.fromEntries(query.entries()),
-      id: itemId,
-    };
-
-    const data = await synoCallJson<unknown>({
-      api: "SYNO.FotoTeam.Browse.Item",
-      version: 1,
-      synoMethod: "getinfo",
-      params: synoParams,
+    const itemData = await fetchVisibleItemInfo({
+      itemId,
+      passphrase: query.get("passphrase"),
+      additional: ["thumbnail"],
+      folderId: query.get("folder_id"),
     });
-
-    const itemData = extractSingle(data);
-    if (!itemData) throw notFound("Item not found");
 
     const item = mapItem(itemData, origin);
     if (!item) throw notFound("Item not found");
@@ -37,17 +29,6 @@ export async function GET(
   } catch (err) {
     return handleApiError(err);
   }
-}
-
-function extractSingle(data: unknown): SynoItem | null {
-  const record = readRecord(data);
-  if (Array.isArray(record?.list) && record.list.length > 0) {
-    return record.list[0] as SynoItem;
-  }
-  if (record?.info && typeof record.info === "object") {
-    return record.info as SynoItem;
-  }
-  return null;
 }
 
 function mapItem(data: SynoItem, origin: string): Item | null {
@@ -141,8 +122,8 @@ function readRecord(value: unknown): Record<string, unknown> | null {
 
 function pickThumbnailSize(thumbnail: Record<string, unknown> | null): "xl" | "m" | "sm" | null {
   if (!thumbnail) return null;
-  if (thumbnail.xl === "ready") return "xl";
-  if (thumbnail.m === "ready") return "m";
   if (thumbnail.sm === "ready") return "sm";
+  if (thumbnail.m === "ready") return "m";
+  if (thumbnail.xl === "ready") return "xl";
   return null;
 }

@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { ensureAdditionalIncludes } from "@/lib/api/filtering";
 import { handleApiError } from "@/lib/api/errors";
+import {
+  assertVisibleFolder,
+  filterVisibleFolders,
+  filterVisibleItems,
+} from "@/lib/api/visibility";
+import { fetchFolderInfoWithFallback } from "@/lib/api/folderInfo";
 import type { Collection, Item } from "@/lib/api/proxyUtils";
+import { sortCollectionContents } from "@/lib/sorting";
 import { synoCallJson } from "@/lib/synology/client";
 
 type SynoItem = Record<string, unknown>;
@@ -17,6 +25,9 @@ export async function GET(
     const offset = parseNumberParam(query.get("offset"), 0);
     const limit = parseNumberParam(query.get("limit"), 100);
     const origin = request.nextUrl.origin;
+    const sortByParamRaw = query.get("sort_by");
+    const sortByParam = sortByParamRaw && sortByParamRaw.trim() ? sortByParamRaw : null;
+    const sortDirection = query.get("sort_direction") === "desc" ? "desc" : "asc";
 
     const itemParams: Record<string, unknown> = {
       offset,
@@ -24,11 +35,8 @@ export async function GET(
       folder_id: parseNumericId(collectionId),
     };
 
-    const sortBy = query.get("sort_by");
-    if (sortBy) itemParams.sort_by = sortBy;
-
-    const sortDirection = query.get("sort_direction");
-    if (sortDirection === "asc" || sortDirection === "desc") {
+    if (sortByParam) itemParams.sort_by = sortByParam;
+    if (sortByParam && (sortDirection === "asc" || sortDirection === "desc")) {
       itemParams.sort_direction = sortDirection;
     }
 
@@ -38,8 +46,8 @@ export async function GET(
     const passphrase = query.get("passphrase");
     if (passphrase) itemParams.passphrase = passphrase;
 
-    const additional = query.get("additional");
-    if (additional) itemParams.additional = additional;
+    const additional = ensureAdditionalIncludes(query.get("additional"), ["tag"]);
+    itemParams.additional = additional;
 
     const folderParams: Record<string, unknown> = {
       offset,
@@ -47,11 +55,16 @@ export async function GET(
       id: parseNumericId(collectionId),
     };
 
-    if (sortDirection === "asc" || sortDirection === "desc") {
-      folderParams.sort_direction = sortDirection;
+    if (sortByParam) {
+      folderParams.sort_by = sortByParam;
+      if (sortDirection === "asc" || sortDirection === "desc") {
+        folderParams.sort_direction = sortDirection;
+      }
     }
 
-    const [folderData, itemData] = await Promise.all([
+    const folderInfoParams: Record<string, unknown> = passphrase ? { passphrase } : {};
+    const [folderInfo, folderData, itemData] = await Promise.all([
+      fetchFolderInfoWithFallback(folderInfoParams, collectionId),
       synoCallJson<unknown>({
         api: "SYNO.FotoTeam.Browse.Folder",
         version: 1,
@@ -66,26 +79,36 @@ export async function GET(
       }),
     ]);
 
+    if (folderInfo) {
+      assertVisibleFolder(folderInfo, "Collection not found");
+    }
+
     const { list: folderList, total: folderTotal } = extractList(folderData);
-    const mappedFolders = folderList
+    const mappedFolders = filterVisibleFolders(folderList)
       .map((entry) => mapCollection(entry, origin))
       .filter(Boolean) as Collection[];
 
     const { list: itemList, total: itemTotal } = extractList(itemData);
-    const mappedItems = itemList
-      .map((entry) => mapItem(entry, origin))
+    const mappedItems = filterVisibleItems(itemList)
+      .map((entry) => mapItem(entry, origin, collectionId))
       .filter(Boolean) as Item[];
+
+    const shouldSortByName =
+      !sortByParam || sortByParam === "name" || sortByParam === "filename";
+    const { folders: sortedFolders, items: sortedItems } = shouldSortByName
+      ? sortCollectionContents(mappedFolders, mappedItems, sortDirection)
+      : { folders: mappedFolders, items: mappedItems };
 
     const resolvedFolderTotal =
       Number.isFinite(folderTotal) && folderTotal > 0
         ? folderTotal
-        : offset + mappedFolders.length;
+        : offset + sortedFolders.length;
     const resolvedItemTotal =
-      Number.isFinite(itemTotal) && itemTotal > 0 ? itemTotal : offset + mappedItems.length;
+      Number.isFinite(itemTotal) && itemTotal > 0 ? itemTotal : offset + sortedItems.length;
 
     return NextResponse.json({
-      folders: mappedFolders,
-      items: mappedItems,
+      folders: sortedFolders,
+      items: sortedItems,
       foldersPage: { offset, limit, total: resolvedFolderTotal },
       page: { offset, limit, total: resolvedItemTotal },
     });
@@ -119,14 +142,16 @@ function mapCollection(data: SynoCollection, origin: string): Collection | null 
     itemCount: Number.isFinite(Number(countValue)) ? Number(countValue) : 0,
     coverItemId: coverValue ? String(coverValue) : null,
     coverThumbnailUrl: coverValue
-      ? `${origin}/api/items/${encodeURIComponent(String(coverValue))}/thumbnail`
+      ? `${origin}/api/items/${encodeURIComponent(String(coverValue))}/thumbnail?folder_id=${encodeURIComponent(
+          String(idValue),
+        )}`
       : null,
     createdAt: toIso(data.create_time ?? data.created_time),
     updatedAt: toIso(data.update_time ?? data.updated_time),
   };
 }
 
-function mapItem(data: SynoItem, origin: string): Item | null {
+function mapItem(data: SynoItem, origin: string, folderId: string): Item | null {
   const idValue = data.id ?? data.unit_id ?? data.item_id ?? data.photo_id;
   if (!idValue) return null;
   const id = String(idValue);
@@ -173,6 +198,7 @@ function mapItem(data: SynoItem, origin: string): Item | null {
   const thumbnailParams = new URLSearchParams();
   if (cacheKey) thumbnailParams.set("cache_key", cacheKey);
   if (thumbnailSize) thumbnailParams.set("size", thumbnailSize);
+  if (folderId) thumbnailParams.set("folder_id", folderId);
   const thumbnailQuery = thumbnailParams.toString();
   item.thumbnailUrl = `${origin}/api/items/${encodeURIComponent(id)}/thumbnail${
     thumbnailQuery ? `?${thumbnailQuery}` : ""
@@ -180,6 +206,7 @@ function mapItem(data: SynoItem, origin: string): Item | null {
   const downloadParams = new URLSearchParams();
   if (cacheKey) downloadParams.set("cache_key", cacheKey);
   if (filenameValue) downloadParams.set("filename", String(filenameValue));
+  if (folderId) downloadParams.set("folder_id", folderId);
   const downloadQuery = downloadParams.toString();
   item.downloadUrl = `${origin}/api/items/${encodeURIComponent(id)}/download${
     downloadQuery ? `?${downloadQuery}` : ""
@@ -217,9 +244,9 @@ function readRecord(value: unknown): Record<string, unknown> | null {
 
 function pickThumbnailSize(thumbnail: Record<string, unknown> | null): "xl" | "m" | "sm" | null {
   if (!thumbnail) return null;
-  if (thumbnail.xl === "ready") return "xl";
-  if (thumbnail.m === "ready") return "m";
   if (thumbnail.sm === "ready") return "sm";
+  if (thumbnail.m === "ready") return "m";
+  if (thumbnail.xl === "ready") return "xl";
   return null;
 }
 

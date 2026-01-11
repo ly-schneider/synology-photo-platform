@@ -1,7 +1,8 @@
 "use client";
 
 import { OTPInput, OTPInputContext } from "input-otp";
-import { Dot } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { CircleDot } from "@hugeicons/core-free-icons";
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
@@ -63,7 +64,7 @@ const InputOTPSeparator = React.forwardRef<
   React.ComponentPropsWithoutRef<"div">
 >(({ ...props }, ref) => (
   <div ref={ref} role="separator" {...props}>
-    <Dot />
+    <HugeiconsIcon icon={CircleDot} />
   </div>
 ));
 InputOTPSeparator.displayName = "InputOTPSeparator";

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { handleApiError, notFound, rangeNotSatisfiable } from "@/lib/api/errors";
-import { synoCallJson, synoCallRaw } from "@/lib/synology/client";
+import { fetchVisibleItemInfo } from "@/lib/api/itemInfo";
+import { synoCallRaw } from "@/lib/synology/client";
 
 type SynoItem = Record<string, unknown>;
 
@@ -13,18 +14,24 @@ export async function GET(
     const { itemId } = await params;
     const searchParams = request.nextUrl.searchParams;
     const disposition = searchParams.get("disposition") === "inline" ? "inline" : "attachment";
+    const range = request.headers.get("range");
+    const passphrase = searchParams.get("passphrase");
+    const itemInfo = await fetchVisibleItemInfo({
+      itemId,
+      passphrase,
+      additional: [],
+      folderId: searchParams.get("folder_id"),
+    });
     const filename =
       searchParams.get("filename") ??
-      (await resolveFilename(itemId)) ??
+      resolveFilenameFromInfo(itemInfo) ??
       `item-${itemId}`;
-    const range = request.headers.get("range");
 
     const cacheKeyParam = searchParams.get("cache_key");
     const synoParams: Record<string, unknown> = {
       unit_id: [parseNumericId(itemId)],
     };
     if (cacheKeyParam) synoParams.cache_key = [cacheKeyParam];
-    const passphrase = searchParams.get("passphrase");
     if (passphrase) synoParams.passphrase = passphrase;
 
     const upstream = await synoCallRaw({
@@ -99,38 +106,12 @@ function parseNumericId(value: string): number | string {
   return Number.isFinite(numeric) ? numeric : value;
 }
 
-async function resolveFilename(itemId: string): Promise<string | null> {
-  const data = await synoCallJson<unknown>({
-    api: "SYNO.FotoTeam.Browse.Item",
-    version: 1,
-    synoMethod: "getinfo",
-    params: {
-      id: parseNumericId(itemId),
-    },
-  });
-
-  const item = extractSingle(data);
-  const filename = item?.filename ?? item?.name;
+function resolveFilenameFromInfo(item: SynoItem): string | null {
+  const filename = item.filename ?? item.name;
   if (typeof filename === "string" && filename.trim()) {
     return filename;
   }
   return null;
-}
-
-function extractSingle(data: unknown): SynoItem | null {
-  const record = readRecord(data);
-  if (Array.isArray(record?.list) && record.list.length > 0) {
-    return record.list[0] as SynoItem;
-  }
-  if (record?.info && typeof record.info === "object") {
-    return record.info as SynoItem;
-  }
-  return null;
-}
-
-function readRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object") return null;
-  return value as Record<string, unknown>;
 }
 
 function sanitizeFilename(filename: string): string {

@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { handleApiError, notFound } from "@/lib/api/errors";
-import { synoCallJson, synoCallRaw } from "@/lib/synology/client";
+import { fetchVisibleItemInfo } from "@/lib/api/itemInfo";
+import { synoCallRaw } from "@/lib/synology/client";
 
 const DEFAULT_CACHE_CONTROL = "public, max-age=86400";
 type SynoItem = Record<string, unknown>;
+type SynoRecord = Record<string, unknown>;
 
 export async function GET(
   request: NextRequest,
@@ -19,14 +21,17 @@ export async function GET(
       type: "unit",
     };
     if (!("size" in synoParams)) synoParams.size = "m";
+    const passphrase = searchParams.get("passphrase");
+    const itemInfo = await fetchVisibleItemInfo({
+      itemId,
+      passphrase,
+      additional: ["thumbnail"],
+      folderId: searchParams.get("folder_id"),
+      notFoundMessage: "Thumbnail not found",
+    });
     if (!("cache_key" in synoParams)) {
-      const passphrase = searchParams.get("passphrase");
-      try {
-        const cacheKey = await resolveCacheKey(itemId, passphrase);
-        if (cacheKey) synoParams.cache_key = cacheKey;
-      } catch {
-        // Best effort; some servers may not require cache_key.
-      }
+      const cacheKey = resolveCacheKey(itemInfo);
+      if (cacheKey) synoParams.cache_key = cacheKey;
     }
 
     const upstream = await synoCallRaw({
@@ -85,25 +90,8 @@ function buildContentDisposition(filename: string, disposition: "inline" | "atta
   return `${disposition}; filename="${safe}"`;
 }
 
-async function resolveCacheKey(
-  itemId: string,
-  passphrase: string | null,
-): Promise<string | null> {
-  const params: Record<string, unknown> = {
-    id: parseNumericId(itemId),
-    additional: ["thumbnail"],
-  };
-  if (passphrase) params.passphrase = passphrase;
-
-  const data = await synoCallJson<unknown>({
-    api: "SYNO.FotoTeam.Browse.Item",
-    version: 1,
-    synoMethod: "getinfo",
-    params,
-  });
-
-  const item = extractSingle(data);
-  const additional = readRecord(item?.additional);
+function resolveCacheKey(item: SynoItem): string | null {
+  const additional = readRecord(item.additional);
   const thumbnail = readRecord(additional?.thumbnail);
   const cacheKey = thumbnail?.cache_key;
   if (typeof cacheKey === "string") return cacheKey;
@@ -111,20 +99,9 @@ async function resolveCacheKey(
   return null;
 }
 
-function extractSingle(data: unknown): SynoItem | null {
-  const record = readRecord(data);
-  if (Array.isArray(record?.list) && record.list.length > 0) {
-    return record.list[0] as SynoItem;
-  }
-  if (record?.info && typeof record.info === "object") {
-    return record.info as SynoItem;
-  }
-  return null;
-}
-
-function readRecord(value: unknown): Record<string, unknown> | null {
+function readRecord(value: unknown): SynoRecord | null {
   if (!value || typeof value !== "object") return null;
-  return value as Record<string, unknown>;
+  return value as SynoRecord;
 }
 
 function parseNumericId(value: string): number | string {

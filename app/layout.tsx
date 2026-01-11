@@ -1,5 +1,3 @@
-import Footer from "@/components/footer";
-import Navbar from "@/components/navbar";
 import ServiceWorker from "@/components/pwa/service-worker";
 import { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
@@ -94,14 +92,11 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#1a1a1a" },
-  ],
-  colorScheme: "light dark",
+  themeColor: "#ffffff",
+  colorScheme: "light",
 };
 
-export const geistSans = Geist({
+const geistSans = Geist({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-geist",
@@ -115,10 +110,8 @@ export default function RootLayout({
   return (
     <html lang="de" className={geistSans.variable}>
       <body className="bg-background text-foreground overflow-x-hidden flex flex-col min-h-screen">
-        <Navbar />
         {children}
         <ServiceWorker />
-        <Footer />
       </body>
     </html>
   );

@@ -1,7 +1,8 @@
 "use client";
 
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
-import { ChevronDown } from "lucide-react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowDown02Icon } from "@hugeicons/core-free-icons";
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
@@ -34,7 +35,10 @@ const AccordionTrigger = React.forwardRef<
       {...props}
     >
       {children}
-      <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200" />
+      <HugeiconsIcon
+        icon={ArrowDown02Icon}
+        className="h-4 w-4 shrink-0 transition-transform duration-200"
+      />
     </AccordionPrimitive.Trigger>
   </AccordionPrimitive.Header>
 ));
