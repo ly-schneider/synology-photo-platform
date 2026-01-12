@@ -26,3 +26,7 @@ export async function getSessionVersion(): Promise<number> {
 export async function incrementSessionVersion(): Promise<number> {
   return await redis.incr(SESSION_VERSION_KEY);
 }
+
+export async function clearSession(): Promise<void> {
+  await redis.del(SESSION_KEY);
+}

@@ -1,6 +1,7 @@
 import { redis } from "@/lib/redis";
 import { login } from "./auth";
 import {
+  clearSession,
   getSessionVersion,
   getStoredSession,
   incrementSessionVersion,
@@ -69,6 +70,13 @@ function buildAuthHeaders(
   const headers = new Headers(extra);
   if (session.synotoken) headers.set("X-SYNO-TOKEN", session.synotoken);
   if (session.did) headers.set("X-SYNO-DID", session.did);
+  const cookieParts: string[] = [];
+  const existingCookie = headers.get("Cookie");
+  if (existingCookie) cookieParts.push(existingCookie);
+  if (session.sid) cookieParts.push(`id=${session.sid}`);
+  if (session.synotoken) cookieParts.push(`synotoken=${session.synotoken}`);
+  if (session.did) cookieParts.push(`did=${session.did}`);
+  if (cookieParts.length > 0) headers.set("Cookie", cookieParts.join("; "));
   return headers;
 }
 
@@ -157,6 +165,7 @@ export async function synoCallJson<T>(opts: SynoCallOptions): Promise<T> {
 
   let reloginAttempts = 0;
   let networkAttempts = 0;
+  let sessionReset = false;
 
   while (true) {
     const sessionVersion = await getSessionVersion();
@@ -231,6 +240,13 @@ export async function synoCallJson<T>(opts: SynoCallOptions): Promise<T> {
         await forceRelogin(sessionVersion);
         continue;
       }
+      if (!sessionReset) {
+        sessionReset = true;
+        console.log(`[synology] clearing session and retrying fresh login`);
+        await incrementSessionVersion();
+        await clearSession();
+        continue;
+      }
     }
 
     if (
@@ -257,6 +273,7 @@ export async function synoCallRaw(
 ): Promise<Response> {
   const reloginRetries = opts.reloginRetries ?? 1;
   let reloginAttempts = 0;
+  let sessionReset = false;
 
   while (true) {
     const sessionVersion = await getSessionVersion();
@@ -292,6 +309,13 @@ export async function synoCallRaw(
         await forceRelogin(sessionVersion);
         continue;
       }
+      if (!sessionReset) {
+        sessionReset = true;
+        console.log(`[synology] clearing session and retrying fresh login (raw)`);
+        await incrementSessionVersion();
+        await clearSession();
+        continue;
+      }
     }
 
     // Some "download" APIs return JSON with success:false and an error code.
@@ -307,6 +331,15 @@ export async function synoCallRaw(
         if (reloginAttempts < reloginRetries) {
           reloginAttempts++;
           await forceRelogin(sessionVersion);
+          continue;
+        }
+        if (!sessionReset) {
+          sessionReset = true;
+          console.log(
+            `[synology] clearing session and retrying fresh login (raw, json error)`,
+          );
+          await incrementSessionVersion();
+          await clearSession();
           continue;
         }
       }
