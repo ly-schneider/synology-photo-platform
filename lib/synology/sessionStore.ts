@@ -3,7 +3,7 @@ import type { SynologySession } from "./types";
 
 const SESSION_KEY = "synology:session";
 const SESSION_VERSION_KEY = "synology:session:version";
-const USE_SHARED_SESSION =
+export const USE_SHARED_SESSION =
   process.env.SYNOLOGY_USE_SHARED_SESSION !== "false";
 
 const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 24; // 24h

@@ -1,6 +1,7 @@
 import { redis } from "@/lib/redis";
 import { login } from "./auth";
 import {
+  USE_SHARED_SESSION,
   clearSession,
   getSessionVersion,
   getStoredSession,
@@ -20,8 +21,28 @@ function entryUrl(): string {
 }
 
 const LOCK_KEY = "synology:session:lock";
+let memoryLock: Promise<void> | null = null;
 
 async function withLoginLock<T>(fn: () => Promise<T>): Promise<T> {
+  if (!USE_SHARED_SESSION) {
+    // In-memory mutex for single runtime instance (avoids cross-IP locking)
+    while (memoryLock) {
+      await memoryLock;
+    }
+    const run = (async () => {
+      try {
+        return await fn();
+      } finally {
+        memoryLock = null;
+      }
+    })();
+    memoryLock = run.then(
+      () => {},
+      () => {},
+    );
+    return run;
+  }
+
   const token = crypto.randomUUID();
 
   for (let attempt = 0; attempt < 3; attempt++) {
