@@ -79,8 +79,9 @@ async function forceRelogin(staleVersion: number): Promise<SynologySession> {
       const existing = await getStoredSession();
       if (existing?.sid) return existing;
     }
+    const oldSession = await getStoredSession();
     await incrementSessionVersion();
-    return await login();
+    return await login(oldSession?.did);
   });
 }
 

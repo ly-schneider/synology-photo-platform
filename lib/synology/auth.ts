@@ -18,17 +18,21 @@ function env(name: string): string {
   return v;
 }
 
-async function loginOnce(): Promise<SynologySession> {
+async function loginOnce(existingDid?: string): Promise<SynologySession> {
   const params = new URLSearchParams();
   params.set("api", "SYNO.API.Auth");
-  params.set("version", "3");
+  params.set("version", "7");
   params.set("method", "login");
   params.set("account", env("SYNOLOGY_USERNAME"));
   params.set("passwd", env("SYNOLOGY_PASSWORD"));
-
   params.set("format", "sid");
-
   params.set("enable_syno_token", "yes");
+  params.set("enable_device_token", "yes");
+  params.set("device_name", "synology-photo-platform");
+
+  if (existingDid) {
+    params.set("device_id", existingDid);
+  }
 
   const res = await fetch(authUrl(), {
     method: "POST",
@@ -55,7 +59,7 @@ async function loginOnce(): Promise<SynologySession> {
   const session: SynologySession = {
     sid: json.data.sid,
     synotoken: json.data.synotoken,
-    did: json.data.did,
+    did: json.data.did ?? existingDid,
     createdAt: now,
     updatedAt: now,
   };
@@ -64,10 +68,10 @@ async function loginOnce(): Promise<SynologySession> {
   return session;
 }
 
-export async function login(): Promise<SynologySession> {
+export async function login(existingDid?: string): Promise<SynologySession> {
   let lastErr: unknown;
   try {
-    return await loginOnce();
+    return await loginOnce(existingDid);
   } catch (e) {
     lastErr = e;
   }
