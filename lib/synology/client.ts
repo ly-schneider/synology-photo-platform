@@ -166,6 +166,7 @@ export async function synoCallJson<T>(opts: SynoCallOptions): Promise<T> {
   let reloginAttempts = 0;
   let networkAttempts = 0;
   let sessionReset = false;
+  let usedLastResort = false;
 
   while (true) {
     const sessionVersion = await getSessionVersion();
@@ -247,6 +248,12 @@ export async function synoCallJson<T>(opts: SynoCallOptions): Promise<T> {
         await clearSession();
         continue;
       }
+      if (!usedLastResort) {
+        usedLastResort = true;
+        console.log(`[synology] last-resort login for ${opts.api}.${opts.synoMethod}`);
+        await login();
+        continue;
+      }
     }
 
     if (
@@ -274,6 +281,7 @@ export async function synoCallRaw(
   const reloginRetries = opts.reloginRetries ?? 1;
   let reloginAttempts = 0;
   let sessionReset = false;
+  let usedLastResort = false;
 
   while (true) {
     const sessionVersion = await getSessionVersion();
@@ -316,6 +324,14 @@ export async function synoCallRaw(
         await clearSession();
         continue;
       }
+      if (!usedLastResort) {
+        usedLastResort = true;
+        console.log(
+          `[synology] last-resort login for ${opts.api}.${opts.synoMethod} (raw)`,
+        );
+        await login();
+        continue;
+      }
     }
 
     // Some "download" APIs return JSON with success:false and an error code.
@@ -340,6 +356,14 @@ export async function synoCallRaw(
           );
           await incrementSessionVersion();
           await clearSession();
+          continue;
+        }
+        if (!usedLastResort) {
+          usedLastResort = true;
+          console.log(
+            `[synology] last-resort login for ${opts.api}.${opts.synoMethod} (raw, json error)`,
+          );
+          await login();
           continue;
         }
       }

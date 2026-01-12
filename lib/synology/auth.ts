@@ -64,6 +64,10 @@ async function loginOnce(existingDid?: string): Promise<SynologySession> {
     updatedAt: now,
   };
 
+  console.log(
+    `[synology] login success sid=${session.sid ? "yes" : "no"} synotoken=${session.synotoken ? "yes" : "no"} did=${session.did ? "yes" : "no"}`,
+  );
+
   await storeSession(session);
   return session;
 }
