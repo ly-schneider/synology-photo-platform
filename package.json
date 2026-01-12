@@ -5,6 +5,7 @@
   "scripts": {
     "preinstall": "npx only-allow pnpm",
     "dev": "next dev --turbopack",
+    "dev:debug": "next dev --turbopack --inspect",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
