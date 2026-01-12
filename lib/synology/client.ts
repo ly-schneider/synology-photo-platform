@@ -22,27 +22,36 @@ const LOCK_KEY = "synology:session:lock";
 
 async function withLoginLock<T>(fn: () => Promise<T>): Promise<T> {
   const token = crypto.randomUUID();
-  const acquired = await redis.set(LOCK_KEY, token, { nx: true, ex: 10 });
 
-  if (!acquired) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const acquired = await redis.set(LOCK_KEY, token, { nx: true, ex: 10 });
+
+    if (acquired) {
+      try {
+        return await fn();
+      } finally {
+        const currentToken = await redis.get(LOCK_KEY);
+        if (currentToken === token) {
+          await redis.del(LOCK_KEY);
+        }
+      }
+    }
+
     for (let i = 0; i < 20; i++) {
       await sleep(150);
       const currentLock = await redis.get(LOCK_KEY);
       if (!currentLock) {
         const s = await getStoredSession();
         if (s) return s as T;
+        break;
       }
     }
   }
 
-  try {
-    return await fn();
-  } finally {
-    const currentToken = await redis.get(LOCK_KEY);
-    if (currentToken === token) {
-      await redis.del(LOCK_KEY);
-    }
-  }
+  const s = await getStoredSession();
+  if (s) return s as T;
+
+  throw new Error("Failed to acquire login lock after retries");
 }
 
 function sleep(ms: number): Promise<void> {
@@ -75,11 +84,20 @@ async function getOrLoginSession(): Promise<SynologySession> {
 async function forceRelogin(staleVersion: number): Promise<SynologySession> {
   return await withLoginLock(async () => {
     const currentVersion = await getSessionVersion();
+    console.log(
+      `[synology] forceRelogin: staleVersion=${staleVersion}, currentVersion=${currentVersion}`,
+    );
     if (currentVersion > staleVersion) {
       const existing = await getStoredSession();
-      if (existing?.sid) return existing;
+      if (existing?.sid) {
+        console.log(`[synology] forceRelogin: using existing session`);
+        return existing;
+      }
     }
     const oldSession = await getStoredSession();
+    console.log(
+      `[synology] forceRelogin: performing login, preserving did=${oldSession?.did ? "yes" : "no"}`,
+    );
     await incrementSessionVersion();
     return await login(oldSession?.did);
   });
@@ -145,14 +163,15 @@ export async function synoCallJson<T>(opts: SynoCallOptions): Promise<T> {
 
     const code = json.error?.code;
 
-    if (
-      typeof code === "number" &&
-      isSessionError(code) &&
-      reloginAttempts < reloginRetries
-    ) {
-      reloginAttempts++;
-      await forceRelogin(sessionVersion);
-      continue;
+    if (typeof code === "number" && isSessionError(code)) {
+      console.log(
+        `[synology] session error ${code} for ${opts.api}.${opts.synoMethod}, attempt ${reloginAttempts + 1}/${reloginRetries + 1}`,
+      );
+      if (reloginAttempts < reloginRetries) {
+        reloginAttempts++;
+        await forceRelogin(sessionVersion);
+        continue;
+      }
     }
 
     if (
@@ -210,14 +229,15 @@ export async function synoCallRaw(
       const json = (await res.json()) as SynologyResponse<unknown>;
       const code = json.success ? undefined : json.error?.code;
 
-      if (
-        typeof code === "number" &&
-        isSessionError(code) &&
-        reloginAttempts < (opts.reloginRetries ?? 1)
-      ) {
-        reloginAttempts++;
-        await forceRelogin(sessionVersion);
-        continue;
+      if (typeof code === "number" && isSessionError(code)) {
+        console.log(
+          `[synology] session error ${code} for ${opts.api}.${opts.synoMethod} (raw), attempt ${reloginAttempts + 1}`,
+        );
+        if (reloginAttempts < (opts.reloginRetries ?? 1)) {
+          reloginAttempts++;
+          await forceRelogin(sessionVersion);
+          continue;
+        }
       }
 
       if (!json.success) {
