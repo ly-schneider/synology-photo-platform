@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { handleApiError } from "@/lib/api/errors";
-import {
-  assertVisibleFolder,
-  filterVisibleFolders,
-} from "@/lib/api/filtering";
+import { assertVisibleFolder, filterVisibleFolders } from "@/lib/api/filtering";
 import { fetchFolderInfoWithFallback } from "@/lib/api/folderInfo";
 import {
   extractList,

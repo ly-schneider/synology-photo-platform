@@ -1,6 +1,10 @@
 import { redis } from "@/lib/redis";
 import { login } from "./auth";
-import { getStoredSession, storeSession } from "./sessionStore";
+import {
+  getSessionVersion,
+  getStoredSession,
+  incrementSessionVersion,
+} from "./sessionStore";
 import type { SynologyResponse, SynologySession } from "./types";
 import { SynologyApiError } from "./types";
 
@@ -21,26 +25,24 @@ async function withLoginLock<T>(fn: () => Promise<T>): Promise<T> {
   const acquired = await redis.set(LOCK_KEY, token, { nx: true, ex: 10 });
 
   if (!acquired) {
-    // Another instance is logging in; wait briefly for session to appear.
     for (let i = 0; i < 20; i++) {
-      const s = await getStoredSession();
-      if (s) return (await fnUsingExistingSession(fn)) as T;
       await sleep(150);
+      const currentLock = await redis.get(LOCK_KEY);
+      if (!currentLock) {
+        const s = await getStoredSession();
+        if (s) return s as T;
+      }
     }
-    // If still nothing, fall through and try anyway.
   }
 
   try {
     return await fn();
   } finally {
-    // Best effort unlock
-    await redis.del(LOCK_KEY);
+    const currentToken = await redis.get(LOCK_KEY);
+    if (currentToken === token) {
+      await redis.del(LOCK_KEY);
+    }
   }
-}
-
-async function fnUsingExistingSession<T>(fn: () => Promise<T>): Promise<T> {
-  // We already have a session; just run.
-  return await fn();
 }
 
 function sleep(ms: number): Promise<void> {
@@ -48,7 +50,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 // Synology common error codes: session timeout=106, duplicated login=107, invalid session=119,
-// source IP mismatch=150, “system busy / network unstable” includes 109/110/111/117/118.
+// source IP mismatch=150, "system busy / network unstable" includes 109/110/111/117/118.
 function isSessionError(code: number): boolean {
   return code === 106 || code === 107 || code === 119 || code === 150;
 }
@@ -70,8 +72,16 @@ async function getOrLoginSession(): Promise<SynologySession> {
   });
 }
 
-async function forceRelogin(): Promise<SynologySession> {
-  return await withLoginLock(async () => await login());
+async function forceRelogin(staleVersion: number): Promise<SynologySession> {
+  return await withLoginLock(async () => {
+    const currentVersion = await getSessionVersion();
+    if (currentVersion > staleVersion) {
+      const existing = await getStoredSession();
+      if (existing?.sid) return existing;
+    }
+    await incrementSessionVersion();
+    return await login();
+  });
 }
 
 function encodeParamValue(v: unknown): string {
@@ -103,6 +113,7 @@ export async function synoCallJson<T>(opts: SynoCallOptions): Promise<T> {
   let networkAttempts = 0;
 
   while (true) {
+    const sessionVersion = await getSessionVersion();
     const session = await getOrLoginSession();
 
     const url = new URL(entryUrl());
@@ -128,8 +139,6 @@ export async function synoCallJson<T>(opts: SynoCallOptions): Promise<T> {
     const json = (await res.json()) as SynologyResponse<T>;
 
     if (json.success) {
-      const now = Date.now();
-      await storeSession({ ...session, updatedAt: now });
       return json.data;
     }
 
@@ -141,7 +150,7 @@ export async function synoCallJson<T>(opts: SynoCallOptions): Promise<T> {
       reloginAttempts < reloginRetries
     ) {
       reloginAttempts++;
-      await forceRelogin();
+      await forceRelogin(sessionVersion);
       continue;
     }
 
@@ -170,6 +179,7 @@ export async function synoCallRaw(
   let reloginAttempts = 0;
 
   while (true) {
+    const sessionVersion = await getSessionVersion();
     const session = await getOrLoginSession();
 
     const url = new URL(entryUrl());
@@ -193,7 +203,7 @@ export async function synoCallRaw(
       headers: opts.headers,
     });
 
-    // Some “download” APIs return JSON with success:false and an error code.
+    // Some "download" APIs return JSON with success:false and an error code.
     const contentType = res.headers.get("content-type") || "";
     if (contentType.includes("application/json")) {
       const json = (await res.json()) as SynologyResponse<unknown>;
@@ -205,7 +215,7 @@ export async function synoCallRaw(
         reloginAttempts < (opts.reloginRetries ?? 1)
       ) {
         reloginAttempts++;
-        await forceRelogin();
+        await forceRelogin(sessionVersion);
         continue;
       }
 

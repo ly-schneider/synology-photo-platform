@@ -27,15 +27,18 @@ Client Components → Next.js API Routes → Synology Photos API
 ### Key Layers
 
 **API Routes (`app/api/`)**: Proxy layer to Synology Photos API
+
 - `collections/` - List folders, get folder contents
 - `items/[itemId]/` - Photo info, thumbnails, downloads
 
 **Synology Client (`lib/synology/`)**: Handles all Synology API communication
+
 - `client.ts` - Core API caller with session management, auto-relogin on session errors
 - `auth.ts` - Login flow using `SYNO.API.Auth`
 - `sessionStore.ts` - Redis-backed session persistence with distributed lock
 
 **Visibility Filtering (`lib/api/`)**: Server-side content filtering
+
 - Folders ending with `(hide)` are excluded from listings
 - Items tagged with `hide` in Synology Photos are filtered out
 - Enforced in `visibility.ts` and `filtering.ts`
@@ -43,10 +46,12 @@ Client Components → Next.js API Routes → Synology Photos API
 ### Frontend Components
 
 **Gallery** (`components/gallery/`): Collection browsing UI
+
 - `CollectionBrowser` - Main gallery view combining folders and items
 - `FolderGrid`/`ItemGrid` - Grid layouts
 
 **Viewer** (`components/viewer/`): Full-screen photo viewer
+
 - `PhotoViewer` - Image display with swipe gestures
 - Uses `useSwipeGesture` hook for touch navigation (swipe left/right for nav, down to close)
 - `usePhotoViewer` hook manages viewer state and keyboard controls
@@ -59,12 +64,15 @@ Client Components → Next.js API Routes → Synology Photos API
 ## Environment Variables
 
 Required for Synology connection:
+
 - `SYNOLOGY_PHOTO_BASE_URL` - NAS URL (e.g., `https://nas.example.com:5001`)
 - `SYNOLOGY_USERNAME`, `SYNOLOGY_PASSWORD` - Dedicated Synology user credentials
 
 Required for session storage:
+
 - `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`
 
 Optional:
+
 - `SYNOLOGY_ROOT_FOLDER_ID` - Starting folder ID (defaults to listing all accessible folders)
 - `NEXT_PUBLIC_TITLE`, `NEXT_PUBLIC_SHORT_TITLE` - App branding

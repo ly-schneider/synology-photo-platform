@@ -122,7 +122,10 @@ export function toIso(value: unknown): string | null {
   return new Date(ms).toISOString();
 }
 
-export function parseNumberParam(value: string | null, fallback: number): number {
+export function parseNumberParam(
+  value: string | null,
+  fallback: number,
+): number {
   if (value === null || value === "") return fallback;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
