@@ -72,10 +72,18 @@ function buildAuthHeaders(
   return headers;
 }
 
-// Synology common error codes: session timeout=106, duplicated login=107, invalid session=119,
-// source IP mismatch=150, "system busy / network unstable" includes 109/110/111/117/118.
+// Synology common error codes: insufficient privilege/invalid session=103, session timeout=106,
+// duplicated login=107, invalid session=119, source IP mismatch=150,
+// "system busy / network unstable" includes 109/110/111/117/118, generic auth failure=803.
 function isSessionError(code: number): boolean {
-  return code === 106 || code === 107 || code === 119 || code === 150;
+  return (
+    code === 103 ||
+    code === 106 ||
+    code === 107 ||
+    code === 119 ||
+    code === 150 ||
+    code === 803
+  );
 }
 
 function isTransientNetworkError(code: number): boolean {
