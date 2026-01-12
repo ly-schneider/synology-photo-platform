@@ -13,11 +13,9 @@ export default function ServiceWorker() {
     }
 
     const onLoad = () => {
-      navigator.serviceWorker
-        .register("/sw.js")
-        .catch((error) => {
-          console.error("Service worker registration failed:", error);
-        });
+      navigator.serviceWorker.register("/sw.js").catch((error) => {
+        console.error("Service worker registration failed:", error);
+      });
     };
 
     window.addEventListener("load", onLoad);

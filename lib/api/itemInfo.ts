@@ -1,135 +1,75 @@
-import { SynologyApiError } from "@/lib/synology/types";
-import { synoCallJson } from "@/lib/synology/client";
-import { assertVisibleItem } from "@/lib/api/visibility";
 import { notFound } from "@/lib/api/errors";
+import { assertVisibleItem } from "@/lib/api/filtering";
+import { parseNumericId, readRecord } from "@/lib/api/mappers";
+import { synoCallJson } from "@/lib/synology/client";
+import { SynologyApiError } from "@/lib/synology/types";
 
 type SynoItem = Record<string, unknown>;
 
-type FetchItemInfoOptions = {
+type FetchVisibleItemInfoOptions = {
   itemId: string;
   passphrase: string | null;
   additional: string[];
   folderId?: string | null;
-};
-
-type FetchVisibleItemInfoOptions = FetchItemInfoOptions & {
   notFoundMessage?: string;
 };
 
-const ITEM_ID_KEYS = ["id", "unit_id", "item_id", "photo_id"] as const;
 const FOLDER_SCAN_LIMIT = 200;
 const FOLDER_CACHE_TTL_MS = 60_000;
 const folderItemCache = new Map<
   string,
   { expiresAt: number; items: Map<string, SynoItem> }
 >();
-const folderItemInflight = new Map<string, Promise<Map<string, SynoItem>>>();
 
 export async function fetchVisibleItemInfo(
   options: FetchVisibleItemInfoOptions,
 ): Promise<SynoItem> {
-  const { notFoundMessage } = options;
-  const additional = ensureAdditionalIncludes(options.additional, "tag");
-  const item = await fetchItemInfoWithFallback({
-    ...options,
-    additional,
-  });
-  if (!item) throw notFound(notFoundMessage ?? "Item not found");
-  assertVisibleItem(item, notFoundMessage ?? "Item not found");
+  const { notFoundMessage = "Item not found" } = options;
+  const additional = ensureTagIncluded(options.additional);
+
+  const item = await fetchItemInfo({ ...options, additional });
+  if (!item) throw notFound(notFoundMessage);
+
+  assertVisibleItem(item, notFoundMessage);
   return item;
 }
 
-export async function fetchItemInfoWithFallback(
-  options: FetchItemInfoOptions,
+async function fetchItemInfo(
+  options: Omit<FetchVisibleItemInfoOptions, "notFoundMessage">,
 ): Promise<SynoItem | null> {
   const { itemId, passphrase, additional, folderId } = options;
-  const idValue = parseNumericId(itemId);
-  const idString = String(idValue);
-  console.log("[itemInfo] start", { itemId: idString, additional, folderId });
+  const idString = String(parseNumericId(itemId));
 
+  // Try folder scan if folderId provided (most common path)
   if (folderId) {
-    const cached = getCachedFolderItem({
+    const item = await findItemInFolder({
       itemId: idString,
       folderId,
       passphrase,
       additional,
     });
-    if (cached) {
-      console.log("[itemInfo] folder cache hit", { folderId });
-      return cached;
-    }
-
-    try {
-      const item = await findItemInFolder({
-        itemId: idString,
-        folderId,
-        passphrase,
-        additional,
-      });
-      if (item) {
-        console.log("[itemInfo] folder hit", { folderId });
-        return item;
-      }
-      console.log("[itemInfo] folder miss", { folderId });
-      return null;
-    } catch (err) {
-      if (!(err instanceof SynologyApiError)) throw err;
-      console.log("[itemInfo] folder error", { folderId, code: err.code ?? null });
-    }
+    if (item) return item;
   }
 
-  for (const key of ITEM_ID_KEYS) {
-    const params: Record<string, unknown> = {
-      [key]: idValue,
-      additional,
-    };
-    if (passphrase) params.passphrase = passphrase;
+  // Fall back to direct getinfo
+  const params: Record<string, unknown> = {
+    id: parseNumericId(itemId),
+    additional,
+  };
+  if (passphrase) params.passphrase = passphrase;
 
-    try {
-      const data = await synoCallJson<unknown>({
-        api: "SYNO.FotoTeam.Browse.Item",
-        version: 1,
-        synoMethod: "getinfo",
-        params,
-      });
-
-      const item = extractSingle(data);
-      if (item) {
-        console.log("[itemInfo] getinfo hit", { key });
-        return item;
-      }
-    } catch (err) {
-      if (!(err instanceof SynologyApiError)) throw err;
-      console.log("[itemInfo] getinfo error", { key, code: err.code ?? null });
-      const fallbackParams: Record<string, unknown> = {
-        [key]: idValue,
-      };
-      if (passphrase) fallbackParams.passphrase = passphrase;
-      try {
-        const data = await synoCallJson<unknown>({
-          api: "SYNO.FotoTeam.Browse.Item",
-          version: 1,
-          synoMethod: "getinfo",
-          params: fallbackParams,
-        });
-
-        const item = extractSingle(data);
-        if (item) {
-          console.log("[itemInfo] getinfo fallback hit", { key });
-          return item;
-        }
-      } catch (fallbackErr) {
-        if (!(fallbackErr instanceof SynologyApiError)) throw fallbackErr;
-        console.log("[itemInfo] getinfo fallback error", {
-          key,
-          code: fallbackErr.code ?? null,
-        });
-      }
-    }
+  try {
+    const data = await synoCallJson<unknown>({
+      api: "SYNO.FotoTeam.Browse.Item",
+      version: 1,
+      synoMethod: "getinfo",
+      params,
+    });
+    return extractSingle(data);
+  } catch (err) {
+    if (!(err instanceof SynologyApiError)) throw err;
+    return null;
   }
-
-  console.log("[itemInfo] miss", { itemId: idString });
-  return null;
 }
 
 function extractSingle(data: unknown): SynoItem | null {
@@ -143,40 +83,18 @@ function extractSingle(data: unknown): SynoItem | null {
   return null;
 }
 
-function extractListWithTotal(
-  data: unknown,
-): { list: SynoItem[]; total: number } {
-  const record = readRecord(data);
-  const list = Array.isArray(record?.list) ? (record.list as SynoItem[]) : [];
-  const totalValue = record?.total ?? record?.total_count;
-  const total = typeof totalValue === "number" ? totalValue : Number(totalValue ?? list.length);
-  return { list, total: Number.isFinite(total) ? total : list.length };
+function ensureTagIncluded(additional: string[]): string[] {
+  if (additional.some((e) => e.toLowerCase() === "tag")) return additional;
+  return [...additional, "tag"];
 }
 
-function readRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object") return null;
-  return value as Record<string, unknown>;
-}
-
-function parseNumericId(value: string): number | string {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : value;
-}
-
-function ensureAdditionalIncludes(additional: string[], required: string): string[] {
-  const target = required.trim().toLowerCase();
-  if (!target) return additional;
-  if (additional.some((entry) => entry.trim().toLowerCase() === target)) return additional;
-  return [...additional, required];
-}
-
-function buildFolderCacheKey(
+function buildCacheKey(
   folderId: string,
   passphrase: string | null,
   additional: string[],
 ): string {
   const normalized = [...additional]
-    .map((entry) => entry.trim().toLowerCase())
+    .map((e) => e.trim().toLowerCase())
     .filter(Boolean)
     .sort()
     .join("|");
@@ -189,50 +107,28 @@ async function findItemInFolder(options: {
   passphrase: string | null;
   additional: string[];
 }): Promise<SynoItem | null> {
-  const { itemId, folderId, passphrase } = options;
-  const additional = options.additional;
-  const cacheKey = buildFolderCacheKey(folderId, passphrase, additional);
+  const { itemId, folderId, passphrase, additional } = options;
+  const cacheKey = buildCacheKey(folderId, passphrase, additional);
   const now = Date.now();
+
+  // Check cache
   const cached = folderItemCache.get(cacheKey);
   if (cached && cached.expiresAt > now) {
     return cached.items.get(itemId) ?? null;
   }
 
-  const inflight = folderItemInflight.get(cacheKey);
-  if (inflight) {
-    const items = await inflight;
-    return items.get(itemId) ?? null;
-  }
-
-  const loader = loadFolderItems({
-    folderId,
-    passphrase,
-    additional,
-  });
-  folderItemInflight.set(cacheKey, loader);
+  // Load folder items
   try {
-    const items = await loader;
+    const items = await loadFolderItems({ folderId, passphrase, additional });
     folderItemCache.set(cacheKey, {
       expiresAt: Date.now() + FOLDER_CACHE_TTL_MS,
       items,
     });
     return items.get(itemId) ?? null;
-  } finally {
-    folderItemInflight.delete(cacheKey);
+  } catch (err) {
+    if (!(err instanceof SynologyApiError)) throw err;
+    return null;
   }
-}
-
-function getCachedFolderItem(options: {
-  itemId: string;
-  folderId: string;
-  passphrase: string | null;
-  additional: string[];
-}): SynoItem | null {
-  const { itemId, folderId, passphrase, additional } = options;
-  const cacheKey = buildFolderCacheKey(folderId, passphrase, additional);
-  const cached = folderItemCache.get(cacheKey);
-  if (!cached || cached.expiresAt <= Date.now()) return null;
-  return cached.items.get(itemId) ?? null;
 }
 
 async function loadFolderItems(options: {
@@ -260,14 +156,23 @@ async function loadFolderItems(options: {
       synoMethod: "list",
       params,
     });
-    const { list, total: totalCount } = extractListWithTotal(data);
-    total = totalCount;
+
+    const record = readRecord(data);
+    const list = Array.isArray(record?.list) ? (record.list as SynoItem[]) : [];
+    const totalValue = record?.total ?? record?.total_count;
+    total =
+      typeof totalValue === "number"
+        ? totalValue
+        : Number(totalValue ?? list.length);
+
     for (const entry of list) {
       const entryId =
         entry.id ?? entry.unit_id ?? entry.item_id ?? entry.photo_id ?? null;
-      if (entryId === null || entryId === undefined) continue;
-      items.set(String(entryId), entry);
+      if (entryId !== null && entryId !== undefined) {
+        items.set(String(entryId), entry);
+      }
     }
+
     if (list.length === 0) break;
     offset += list.length;
   }

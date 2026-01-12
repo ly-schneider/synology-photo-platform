@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { handleApiError, notFound, rangeNotSatisfiable } from "@/lib/api/errors";
+import {
+  handleApiError,
+  notFound,
+  rangeNotSatisfiable,
+} from "@/lib/api/errors";
 import { fetchVisibleItemInfo } from "@/lib/api/itemInfo";
+import { parseNumericId } from "@/lib/api/mappers";
 import { synoCallRaw } from "@/lib/synology/client";
-
-type SynoItem = Record<string, unknown>;
 
 export async function GET(
   request: NextRequest,
@@ -13,18 +16,21 @@ export async function GET(
   try {
     const { itemId } = await params;
     const searchParams = request.nextUrl.searchParams;
-    const disposition = searchParams.get("disposition") === "inline" ? "inline" : "attachment";
+    const disposition =
+      searchParams.get("disposition") === "inline" ? "inline" : "attachment";
     const range = request.headers.get("range");
     const passphrase = searchParams.get("passphrase");
+
     const itemInfo = await fetchVisibleItemInfo({
       itemId,
       passphrase,
       additional: [],
       folderId: searchParams.get("folder_id"),
     });
+
     const filename =
       searchParams.get("filename") ??
-      resolveFilenameFromInfo(itemInfo) ??
+      resolveFilename(itemInfo) ??
       `item-${itemId}`;
 
     const cacheKeyParam = searchParams.get("cache_key");
@@ -52,7 +58,9 @@ export async function GET(
 
     const headers = buildProxyHeaders(upstream, {
       "Content-Disposition": buildContentDisposition(filename, disposition),
-      ...(upstream.headers.get("accept-ranges") ? {} : { "Accept-Ranges": "bytes" }),
+      ...(upstream.headers.get("accept-ranges")
+        ? {}
+        : { "Accept-Ranges": "bytes" }),
     });
 
     return new NextResponse(upstream.body, {
@@ -91,7 +99,10 @@ function buildProxyHeaders(
   return headers;
 }
 
-function buildContentDisposition(filename: string, disposition: "inline" | "attachment"): string {
+function buildContentDisposition(
+  filename: string,
+  disposition: "inline" | "attachment",
+): string {
   const sanitized = sanitizeFilename(filename);
   const asciiFallback = toAsciiFilename(sanitized);
   const encoded = encodeRFC5987ValueChars(sanitized);
@@ -101,12 +112,7 @@ function buildContentDisposition(filename: string, disposition: "inline" | "atta
   return `${disposition}; filename="${asciiFallback}"`;
 }
 
-function parseNumericId(value: string): number | string {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : value;
-}
-
-function resolveFilenameFromInfo(item: SynoItem): string | null {
+function resolveFilename(item: Record<string, unknown>): string | null {
   const filename = item.filename ?? item.name;
   if (typeof filename === "string" && filename.trim()) {
     return filename;

@@ -1,16 +1,15 @@
+import { notFound } from "@/lib/api/errors";
+
 type SynoRecord = Record<string, unknown>;
 
 const HIDE_TAG = "hide";
 const HIDE_SUFFIX = "(hide)";
 
-export function isHiddenFolderTitle(title: string): boolean {
-  return title.trim().toLowerCase().endsWith(HIDE_SUFFIX);
-}
-
 export function isHiddenFolderEntry(entry: SynoRecord): boolean {
-  const titleValue = entry.name ?? entry.title ?? entry.folder_name ?? entry.display_name;
+  const titleValue =
+    entry.name ?? entry.title ?? entry.folder_name ?? entry.display_name;
   if (!titleValue) return false;
-  return isHiddenFolderTitle(String(titleValue));
+  return String(titleValue).trim().toLowerCase().endsWith(HIDE_SUFFIX);
 }
 
 export function hasHideTag(entry: SynoRecord): boolean {
@@ -43,6 +42,32 @@ export function ensureAdditionalIncludes(
   return merged;
 }
 
+export function assertVisibleFolder(
+  entry: SynoRecord,
+  message = "Collection not found",
+): void {
+  if (isHiddenFolderEntry(entry)) {
+    throw notFound(message);
+  }
+}
+
+export function assertVisibleItem(
+  entry: SynoRecord,
+  message = "Item not found",
+): void {
+  if (hasHideTag(entry)) {
+    throw notFound(message);
+  }
+}
+
+export function filterVisibleFolders<T extends SynoRecord>(entries: T[]): T[] {
+  return entries.filter((entry) => !isHiddenFolderEntry(entry));
+}
+
+export function filterVisibleItems<T extends SynoRecord>(entries: T[]): T[] {
+  return entries.filter((entry) => !hasHideTag(entry));
+}
+
 function parseAdditionalList(value: string): string[] | null {
   if (!value) return null;
   if (value.trim().startsWith("[")) {
@@ -56,7 +81,10 @@ function parseAdditionalList(value: string): string[] | null {
       return null;
     }
   }
-  const split = value.split(",").map((entry) => entry.trim()).filter(Boolean);
+  const split = value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
   return split.length > 0 ? split : null;
 }
 
@@ -67,11 +95,14 @@ function collectTagCandidates(entry: SynoRecord): unknown[] {
   appendTagCandidates(candidates, entry.tag_list);
   appendTagCandidates(candidates, entry.taglist);
 
-  const additional = readRecord(entry.additional);
-  appendTagCandidates(candidates, additional?.tag);
-  appendTagCandidates(candidates, additional?.tags);
-  appendTagCandidates(candidates, additional?.tag_list);
-  appendTagCandidates(candidates, additional?.taglist);
+  const additional = entry.additional;
+  if (additional && typeof additional === "object") {
+    const add = additional as SynoRecord;
+    appendTagCandidates(candidates, add.tag);
+    appendTagCandidates(candidates, add.tags);
+    appendTagCandidates(candidates, add.tag_list);
+    appendTagCandidates(candidates, add.taglist);
+  }
 
   return candidates;
 }
@@ -108,9 +139,4 @@ function matchesTagName(value: unknown, tag: string): boolean {
     }
   }
   return false;
-}
-
-function readRecord(value: unknown): SynoRecord | null {
-  if (!value || typeof value !== "object") return null;
-  return value as SynoRecord;
 }

@@ -1,18 +1,19 @@
 "use client";
 
+import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import { useA2HSPrompt } from "@/hooks/use-a2hs-prompt";
 import { useIsMobile } from "@/hooks/use-mobile";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerTitle,
-} from "@/components/ui/drawer";
-import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon, Share03Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 
 export function A2HSNudge() {
-  const { shouldShowNudge, showInstallPrompt, dismissNudge, canInstall, isIOS } =
-    useA2HSPrompt();
+  const {
+    shouldShowNudge,
+    showInstallPrompt,
+    dismissNudge,
+    canInstall,
+    isIOS,
+  } = useA2HSPrompt();
   const isMobile = useIsMobile();
 
   // Only show the nudge on mobile devices
@@ -33,7 +34,10 @@ export function A2HSNudge() {
   };
 
   return (
-    <Drawer open={shouldShowNudge} onOpenChange={(open: boolean) => !open && handleDismiss()}>
+    <Drawer
+      open={shouldShowNudge}
+      onOpenChange={(open: boolean) => !open && handleDismiss()}
+    >
       <DrawerContent className="border-0 bg-white">
         <div className="flex flex-col items-center gap-6 p-6 pb-10">
           {/* Animated phone with icon */}
@@ -76,11 +80,14 @@ export function A2HSNudge() {
                   Teilen
                 </span>{" "}
                 und dann{" "}
-                <span className="font-medium text-black">&quot;Zum Home-Bildschirm&quot;</span>
+                <span className="font-medium text-black">
+                  &quot;Zum Home-Bildschirm&quot;
+                </span>
               </p>
             ) : (
               <p className="text-sm text-black/60">
-                Füge diese App zu deinem Startbildschirm hinzu für schnellen Zugriff auf deine Fotos.
+                Füge diese App zu deinem Startbildschirm hinzu für schnellen
+                Zugriff auf deine Fotos.
               </p>
             )}
           </div>

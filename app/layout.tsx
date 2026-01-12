@@ -1,5 +1,5 @@
-import ServiceWorker from "@/components/pwa/service-worker";
 import { A2HSNudge } from "@/components/pwa/a2hs-nudge";
+import ServiceWorker from "@/components/pwa/service-worker";
 import { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";

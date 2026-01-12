@@ -16,14 +16,18 @@ export function sortCollectionsByName(
   collections: Collection[],
   direction: SortDirection = "asc",
 ): Collection[] {
-  return [...collections].sort((a, b) => compareNames(a.title, b.title, direction));
+  return [...collections].sort((a, b) =>
+    compareNames(a.title, b.title, direction),
+  );
 }
 
 export function sortItemsByName(
   items: Item[],
   direction: SortDirection = "asc",
 ): Item[] {
-  return [...items].sort((a, b) => compareNames(a.filename, b.filename, direction));
+  return [...items].sort((a, b) =>
+    compareNames(a.filename, b.filename, direction),
+  );
 }
 
 export function sortCollectionContents(

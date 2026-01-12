@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const A2HS_COOKIE_NAME = "a2hs-prompt-seen";
 const COOKIE_EXPIRY_DAYS = 365;
@@ -22,37 +22,34 @@ function isIOSSafari(): boolean {
 }
 
 export function useA2HSPrompt() {
+  const initialState = useMemo(() => {
+    if (typeof window === "undefined") {
+      return { hasSeenPrompt: false, isStandalone: false, isIOS: false };
+    }
+
+    const hasSeenPrompt = !!getCookie(A2HS_COOKIE_NAME);
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (navigator as Navigator & { standalone?: boolean }).standalone === true;
+    const isIOS = !hasSeenPrompt && !isStandalone && isIOSSafari();
+
+    return { hasSeenPrompt, isStandalone, isIOS };
+  }, []);
+
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
-  const [shouldShowNudge, setShouldShowNudge] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
+  const [shouldShowNudge, setShouldShowNudge] = useState(initialState.isIOS);
+  const isIOS = initialState.isIOS;
 
   useEffect(() => {
-    // Check if the prompt has been seen before
-    const hasSeenPrompt = getCookie(A2HS_COOKIE_NAME);
+    if (initialState.hasSeenPrompt) return;
 
-    if (hasSeenPrompt) {
-      return;
-    }
-
-    // Check if app is already installed (standalone mode)
-    if (window.matchMedia("(display-mode: standalone)").matches) {
+    if (initialState.isStandalone) {
       setCookie(A2HS_COOKIE_NAME, "true", COOKIE_EXPIRY_DAYS);
       return;
     }
 
-    // Check for iOS standalone mode (navigator.standalone is iOS-specific)
-    if ((navigator as Navigator & { standalone?: boolean }).standalone === true) {
-      setCookie(A2HS_COOKIE_NAME, "true", COOKIE_EXPIRY_DAYS);
-      return;
-    }
-
-    // Check if iOS Safari - show nudge with manual instructions
-    if (isIOSSafari()) {
-      setIsIOS(true);
-      setShouldShowNudge(true);
-      return;
-    }
+    if (initialState.isIOS) return;
 
     // For other browsers, listen for the beforeinstallprompt event
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -66,10 +63,10 @@ export function useA2HSPrompt() {
     return () => {
       window.removeEventListener(
         "beforeinstallprompt",
-        handleBeforeInstallPrompt
+        handleBeforeInstallPrompt,
       );
     };
-  }, []);
+  }, [initialState]);
 
   const showInstallPrompt = async () => {
     if (!deferredPrompt) {

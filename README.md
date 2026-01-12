@@ -125,6 +125,7 @@ pnpm start
 ### Synology User Permissions
 
 Create a dedicated Synology user account with the following permissions:
+
 - Read access to the photo libraries you want to share
 - Synology Photos application access
 - No admin privileges required
@@ -143,6 +144,7 @@ These filters are enforced server-side, ensuring hidden content remains secure a
 ### Redis Session Storage
 
 The app uses Upstash Redis to store Synology authentication sessions. This enables:
+
 - Shared sessions across all users
 - Reduced authentication requests to your NAS
 - Improved performance and reliability
@@ -191,6 +193,7 @@ This project is open source and ready to fork:
 5. **Share** the URL with your community
 
 Perfect for:
+
 - Churches and community groups sharing event photos
 - Photographers sharing galleries with clients
 - Families sharing private photo collections
@@ -207,6 +210,7 @@ Perfect for:
 ## Contributing
 
 Contributions are welcome! Feel free to:
+
 - Report bugs or issues
 - Suggest new features
 - Submit pull requests

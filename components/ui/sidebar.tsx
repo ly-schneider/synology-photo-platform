@@ -1,9 +1,9 @@
 "use client";
 
+import { PanelLeftIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { Slot } from "@radix-ui/react-slot";
 import { VariantProps, cva } from "class-variance-authority";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { PanelLeftIcon } from "@hugeicons/core-free-icons";
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";
@@ -669,10 +669,14 @@ const SidebarMenuSkeleton = React.forwardRef<
     showIcon?: boolean;
   }
 >(({ className, showIcon = false, ...props }, ref) => {
-  // Random width between 50 to 90%.
+  const id = React.useId();
   const width = React.useMemo(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`;
-  }, []);
+    let hash = 0;
+    for (let i = 0; i < id.length; i += 1) {
+      hash = (hash + id.charCodeAt(i)) % 41;
+    }
+    return `${50 + hash}%`;
+  }, [id]);
 
   return (
     <div

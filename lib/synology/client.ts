@@ -1,8 +1,8 @@
 import { redis } from "@/lib/redis";
+import { login } from "./auth";
+import { getStoredSession, storeSession } from "./sessionStore";
 import type { SynologyResponse, SynologySession } from "./types";
 import { SynologyApiError } from "./types";
-import { getStoredSession, storeSession } from "./sessionStore";
-import { login } from "./auth";
 
 function synoWebApiBase(): string {
   const base = process.env.SYNOLOGY_PHOTO_BASE_URL;
@@ -24,7 +24,7 @@ async function withLoginLock<T>(fn: () => Promise<T>): Promise<T> {
     // Another instance is logging in; wait briefly for session to appear.
     for (let i = 0; i < 20; i++) {
       const s = await getStoredSession();
-      if (s) return (await fnUsingExistingSession(fn, s)) as T;
+      if (s) return (await fnUsingExistingSession(fn)) as T;
       await sleep(150);
     }
     // If still nothing, fall through and try anyway.
@@ -33,12 +33,12 @@ async function withLoginLock<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } finally {
-    // Best effort unlock 
+    // Best effort unlock
     await redis.del(LOCK_KEY);
   }
 }
 
-async function fnUsingExistingSession<T>(fn: () => Promise<T>, _s: SynologySession): Promise<T> {
+async function fnUsingExistingSession<T>(fn: () => Promise<T>): Promise<T> {
   // We already have a session; just run.
   return await fn();
 }
@@ -54,7 +54,9 @@ function isSessionError(code: number): boolean {
 }
 
 function isTransientNetworkError(code: number): boolean {
-  return code === 109 || code === 110 || code === 111 || code === 117 || code === 118;
+  return (
+    code === 109 || code === 110 || code === 111 || code === 117 || code === 118
+  );
 }
 
 async function getOrLoginSession(): Promise<SynologySession> {
@@ -114,7 +116,8 @@ export async function synoCallJson<T>(opts: SynoCallOptions): Promise<T> {
     if (session.synotoken) q.set("SynoToken", session.synotoken);
 
     if (opts.params) {
-      for (const [k, v] of Object.entries(opts.params)) q.set(k, encodeParamValue(v));
+      for (const [k, v] of Object.entries(opts.params))
+        q.set(k, encodeParamValue(v));
     }
 
     const res = await fetch(url.toString(), {
@@ -132,7 +135,11 @@ export async function synoCallJson<T>(opts: SynoCallOptions): Promise<T> {
 
     const code = json.error?.code;
 
-    if (typeof code === "number" && isSessionError(code) && reloginAttempts < reloginRetries) {
+    if (
+      typeof code === "number" &&
+      isSessionError(code) &&
+      reloginAttempts < reloginRetries
+    ) {
       reloginAttempts++;
       await forceRelogin();
       continue;
@@ -157,7 +164,9 @@ export async function synoCallJson<T>(opts: SynoCallOptions): Promise<T> {
 }
 
 // Used for raw responses, e.g. file downloads.
-export async function synoCallRaw(opts: Omit<SynoCallOptions, "endpoint">): Promise<Response> {
+export async function synoCallRaw(
+  opts: Omit<SynoCallOptions, "endpoint">,
+): Promise<Response> {
   let reloginAttempts = 0;
 
   while (true) {
@@ -170,12 +179,13 @@ export async function synoCallRaw(opts: Omit<SynoCallOptions, "endpoint">): Prom
     q.set("version", String(opts.version));
     q.set("method", opts.synoMethod);
     q.set("_sid", session.sid);
-    
+
     if (session.synotoken) q.set("SynoToken", session.synotoken);
 
     if (opts.params) {
-      for (const [k, v] of Object.entries(opts.params)) q.set(k, encodeParamValue(v));
-    } 
+      for (const [k, v] of Object.entries(opts.params))
+        q.set(k, encodeParamValue(v));
+    }
 
     const res = await fetch(url.toString(), {
       method: opts.method ?? "GET",
@@ -189,7 +199,11 @@ export async function synoCallRaw(opts: Omit<SynoCallOptions, "endpoint">): Prom
       const json = (await res.json()) as SynologyResponse<unknown>;
       const code = json.success ? undefined : json.error?.code;
 
-      if (typeof code === "number" && isSessionError(code) && reloginAttempts < (opts.reloginRetries ?? 1)) {
+      if (
+        typeof code === "number" &&
+        isSessionError(code) &&
+        reloginAttempts < (opts.reloginRetries ?? 1)
+      ) {
         reloginAttempts++;
         await forceRelogin();
         continue;

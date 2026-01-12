@@ -1,23 +1,6 @@
-export type CollectionType = "folder";
-export type ItemType = "photo" | "video" | "other";
-export type ThumbnailPreset = "xs" | "s" | "m" | "l" | "xl";
-export type SortOption =
-  | "createdAtDesc"
-  | "createdAtAsc"
-  | "takenAtDesc"
-  | "takenAtAsc"
-  | "filenameAsc"
-  | "filenameDesc";
-
-export type Pagination = {
-  offset: number;
-  limit: number;
-  total: number;
-};
-
 export type Collection = {
   id: string;
-  type: CollectionType;
+  type: "folder";
   title: string;
   description: string | null;
   itemCount: number;
@@ -29,7 +12,7 @@ export type Collection = {
 
 export type Item = {
   id: string;
-  type: ItemType;
+  type: "photo" | "video" | "other";
   filename: string;
   mimeType?: string | null;
   sizeBytes?: number | null;

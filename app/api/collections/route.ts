@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { handleApiError } from "@/lib/api/errors";
-import type { Collection } from "@/lib/api/proxyUtils";
+import {
+  assertVisibleFolder,
+  filterVisibleFolders,
+} from "@/lib/api/filtering";
 import { fetchFolderInfoWithFallback } from "@/lib/api/folderInfo";
-import { assertVisibleFolder, filterVisibleFolders } from "@/lib/api/visibility";
+import {
+  extractList,
+  mapCollection,
+  parseNumberParam,
+} from "@/lib/api/mappers";
+import type { Collection } from "@/lib/api/proxyUtils";
 import { sortCollectionsByName } from "@/lib/sorting";
 import { synoCallJson } from "@/lib/synology/client";
-
-type SynoCollection = Record<string, unknown>;
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
@@ -16,9 +22,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const limit = parseNumberParam(params.get("limit"), 100);
     const origin = request.nextUrl.origin;
     const sortByParamRaw = params.get("sort_by");
-    const sortByParam = sortByParamRaw && sortByParamRaw.trim() ? sortByParamRaw : null;
+    const sortByParam =
+      sortByParamRaw && sortByParamRaw.trim() ? sortByParamRaw : null;
     const sortBy = sortByParam ?? "name";
-    const sortDirection = params.get("sort_direction") === "desc" ? "desc" : "asc";
+    const sortDirection =
+      params.get("sort_direction") === "desc" ? "desc" : "asc";
 
     const { synoMethod, synoParams } = buildFolderListRequest(
       params,
@@ -27,6 +35,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       sortByParam,
       sortDirection,
     );
+
     const targetId = synoMethod === "list" ? synoParams.id : null;
     if (targetId !== null && targetId !== undefined) {
       const folderInfoParams: Record<string, unknown> = {};
@@ -40,11 +49,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         assertVisibleFolder(folderInfo, "Collection not found");
       }
     }
+
     const collections = await listCollections(synoParams, synoMethod, origin);
     const sortedCollections =
       sortBy === "name"
-        ? { ...collections, data: sortCollectionsByName(collections.data, sortDirection) }
+        ? {
+            ...collections,
+            data: sortCollectionsByName(collections.data, sortDirection),
+          }
         : collections;
+
     const resolvedOffset = synoMethod === "list_parents" ? 0 : offset;
     const resolvedLimit =
       synoMethod === "list_parents" ? sortedCollections.data.length : limit;
@@ -82,65 +96,16 @@ async function listCollections(
   return { data: mapped, total };
 }
 
-function extractList(data: unknown): { list: SynoCollection[]; total: number } {
-  const record = readRecord(data);
-  const list = Array.isArray(record?.list) ? (record?.list as SynoCollection[]) : [];
-  const totalValue = record?.total ?? record?.total_count;
-  const total = typeof totalValue === "number" ? totalValue : Number(totalValue ?? list.length);
-  return { list, total: Number.isFinite(total) ? total : list.length };
-}
-
-function mapCollection(data: SynoCollection, origin: string): Collection | null {
-  const idValue = data.id ?? data.folder_id ?? data.album_id ?? data.share_id;
-  if (!idValue) return null;
-
-  const titleValue = data.name ?? data.title ?? idValue;
-  const descriptionValue = data.description ?? null;
-  const countValue = data.item_count ?? data.count ?? 0;
-  const coverValue = data.cover_unit_id ?? null;
-
-  return {
-    id: String(idValue),
-    type: "folder",
-    title: String(titleValue),
-    description: descriptionValue ? String(descriptionValue) : null,
-    itemCount: Number.isFinite(Number(countValue)) ? Number(countValue) : 0,
-    coverItemId: coverValue ? String(coverValue) : null,
-    coverThumbnailUrl: coverValue
-      ? `${origin}/api/items/${encodeURIComponent(String(coverValue))}/thumbnail?folder_id=${encodeURIComponent(
-          String(idValue),
-        )}`
-      : null,
-    createdAt: toIso(data.create_time ?? data.created_time),
-    updatedAt: toIso(data.update_time ?? data.updated_time),
-  };
-}
-
-function toIso(value: unknown): string | null {
-  const numeric = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(numeric)) return null;
-  const ms = numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
-  return new Date(ms).toISOString();
-}
-
-function readRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object") return null;
-  return value as Record<string, unknown>;
-}
-
-function parseNumberParam(value: string | null, fallback: number): number {
-  if (value === null || value === "") return fallback;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
 function buildFolderListRequest(
   params: URLSearchParams,
   offset: number,
   limit: number,
   sortBy: string | null,
   sortDirection: "asc" | "desc",
-): { synoMethod: "list" | "list_parents"; synoParams: Record<string, unknown> } {
+): {
+  synoMethod: "list" | "list_parents";
+  synoParams: Record<string, unknown>;
+} {
   const rootId = process.env.SYNOLOGY_ROOT_FOLDER_ID;
   const hasListParams =
     Boolean(rootId) ||
@@ -154,11 +119,7 @@ function buildFolderListRequest(
     return { synoMethod: "list_parents", synoParams: {} };
   }
 
-  const synoParams: Record<string, unknown> = {
-    offset,
-    limit,
-  };
-
+  const synoParams: Record<string, unknown> = { offset, limit };
   const idValue = params.get("id") ?? rootId ?? "1";
   if (idValue !== null && idValue !== undefined && idValue !== "") {
     const numeric = Number(idValue);

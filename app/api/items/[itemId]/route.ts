@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { handleApiError, notFound } from "@/lib/api/errors";
-import type { Item } from "@/lib/api/proxyUtils";
 import { fetchVisibleItemInfo } from "@/lib/api/itemInfo";
-
-type SynoItem = Record<string, unknown>;
+import { mapItem } from "@/lib/api/mappers";
 
 export async function GET(
   request: NextRequest,
@@ -25,105 +23,8 @@ export async function GET(
     const item = mapItem(itemData, origin);
     if (!item) throw notFound("Item not found");
 
-    return NextResponse.json(item as Item);
+    return NextResponse.json(item);
   } catch (err) {
     return handleApiError(err);
   }
-}
-
-function mapItem(data: SynoItem, origin: string): Item | null {
-  const idValue = data.id ?? data.unit_id ?? data.item_id ?? data.photo_id;
-  if (!idValue) return null;
-  const id = String(idValue);
-
-  const filenameValue = data.filename ?? data.name ?? id;
-  const additional = readRecord(data.additional);
-  const resolution = readRecord(additional?.resolution);
-  const thumbnail = readRecord(additional?.thumbnail);
-  const cacheKeyValue = thumbnail?.cache_key;
-  const cacheKey =
-    typeof cacheKeyValue === "string" || typeof cacheKeyValue === "number"
-      ? String(cacheKeyValue)
-      : null;
-  const thumbnailSize = pickThumbnailSize(thumbnail);
-
-  const item: Item = {
-    id,
-    type: parseItemType(data.type ?? data.item_type ?? data.media_type),
-    filename: String(filenameValue),
-  };
-
-  if (data.mime_type || data.mime) {
-    item.mimeType = String(data.mime_type ?? data.mime);
-  }
-  if (data.filesize || data.size) {
-    const size = Number(data.filesize ?? data.size);
-    item.sizeBytes = Number.isFinite(size) ? size : undefined;
-  }
-
-  const takenAt = toIso(data.time ?? data.taken_time);
-  if (takenAt) item.takenAt = takenAt;
-  const createdAt = toIso(data.create_time ?? data.created_time);
-  if (createdAt) item.createdAt = createdAt;
-
-  const width = Number(resolution?.width ?? data.width ?? data.resolutionx);
-  const height = Number(resolution?.height ?? data.height ?? data.resolutiony);
-  if (Number.isFinite(width)) item.width = width;
-  if (Number.isFinite(height)) item.height = height;
-
-  if (additional?.exif && typeof additional.exif === "object") {
-    item.exif = additional.exif as Record<string, unknown>;
-  }
-
-  const thumbnailParams = new URLSearchParams();
-  if (cacheKey) thumbnailParams.set("cache_key", cacheKey);
-  if (thumbnailSize) thumbnailParams.set("size", thumbnailSize);
-  const thumbnailQuery = thumbnailParams.toString();
-  item.thumbnailUrl = `${origin}/api/items/${encodeURIComponent(id)}/thumbnail${
-    thumbnailQuery ? `?${thumbnailQuery}` : ""
-  }`;
-  const downloadParams = new URLSearchParams();
-  if (cacheKey) downloadParams.set("cache_key", cacheKey);
-  if (filenameValue) downloadParams.set("filename", String(filenameValue));
-  const downloadQuery = downloadParams.toString();
-  item.downloadUrl = `${origin}/api/items/${encodeURIComponent(id)}/download${
-    downloadQuery ? `?${downloadQuery}` : ""
-  }`;
-
-  return item;
-}
-
-function parseItemType(value: unknown): "photo" | "video" | "other" {
-  if (typeof value === "number") {
-    if (value === 1) return "photo";
-    if (value === 2) return "video";
-    if (value === 3) return "photo";
-  }
-  if (typeof value === "string") {
-    const lower = value.toLowerCase();
-    if (lower === "live") return "photo";
-    if (lower.includes("photo") || lower.includes("image")) return "photo";
-    if (lower.includes("video")) return "video";
-  }
-  return "other";
-}
-
-function toIso(value: unknown): string | null {
-  const numeric = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(numeric)) return null;
-  const ms = numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
-  return new Date(ms).toISOString();
-}
-
-function readRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object") return null;
-  return value as Record<string, unknown>;
-}
-
-function pickThumbnailSize(thumbnail: Record<string, unknown> | null): "xl" | "m" | "sm" | null {
-  if (!thumbnail) return null;
-  if (thumbnail.sm === "ready") return "sm";
-  if (thumbnail.m === "ready") return "m";
-  if (thumbnail.xl === "ready") return "xl";
-  return null;
 }

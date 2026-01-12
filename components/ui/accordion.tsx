@@ -1,8 +1,8 @@
 "use client";
 
-import * as AccordionPrimitive from "@radix-ui/react-accordion";
-import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowDown02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import * as AccordionPrimitive from "@radix-ui/react-accordion";
 import * as React from "react";
 
 import { cn } from "@/lib/utils";

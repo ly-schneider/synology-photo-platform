@@ -1,6 +1,9 @@
-import { Slot } from "@radix-ui/react-slot";
+import {
+  ArrowRight02Icon,
+  MoreHorizontalIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowRight02Icon, MoreHorizontalIcon } from "@hugeicons/core-free-icons";
+import { Slot } from "@radix-ui/react-slot";
 import * as React from "react";
 
 import { cn } from "@/lib/utils";

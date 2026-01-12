@@ -1,8 +1,12 @@
 "use client";
 
-import * as MenubarPrimitive from "@radix-ui/react-menubar";
+import {
+  ArrowRight01Icon,
+  CircleIcon,
+  Tick02Icon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowRight01Icon, CircleIcon, Tick02Icon } from "@hugeicons/core-free-icons";
+import * as MenubarPrimitive from "@radix-ui/react-menubar";
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
