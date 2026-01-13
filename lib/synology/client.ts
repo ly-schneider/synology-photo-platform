@@ -1,12 +1,5 @@
-import { redis } from "@/lib/redis";
 import { login } from "./auth";
-import {
-  USE_SHARED_SESSION,
-  clearSession,
-  getSessionVersion,
-  getStoredSession,
-  incrementSessionVersion,
-} from "./sessionStore";
+import { clearSession, getSession, withLoginMutex } from "./sessionStore";
 import type { SynologyResponse, SynologySession } from "./types";
 import { SynologyApiError } from "./types";
 
@@ -20,68 +13,8 @@ function entryUrl(): string {
   return synoWebApiBase() + "/entry.cgi";
 }
 
-const LOCK_KEY = "synology:session:lock";
-let memoryLock: Promise<void> | null = null;
-
-async function withLoginLock<T>(fn: () => Promise<T>): Promise<T> {
-  if (!USE_SHARED_SESSION) {
-    // In-memory mutex for single runtime instance (avoids cross-IP locking)
-    while (memoryLock) {
-      await memoryLock;
-    }
-    const run = (async () => {
-      try {
-        return await fn();
-      } finally {
-        memoryLock = null;
-      }
-    })();
-    memoryLock = run.then(
-      () => {},
-      () => {},
-    );
-    return run;
-  }
-
-  const token = crypto.randomUUID();
-
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const acquired = await redis.set(LOCK_KEY, token, { nx: true, ex: 10 });
-
-    if (acquired) {
-      try {
-        return await fn();
-      } finally {
-        const currentToken = await redis.get(LOCK_KEY);
-        if (currentToken === token) {
-          await redis.del(LOCK_KEY);
-        }
-      }
-    }
-
-    for (let i = 0; i < 20; i++) {
-      await sleep(150);
-      const currentLock = await redis.get(LOCK_KEY);
-      if (!currentLock) {
-        const s = await getStoredSession();
-        if (s) return s as T;
-        break;
-      }
-    }
-  }
-
-  const s = await getStoredSession();
-  if (s) return s as T;
-
-  throw new Error("Failed to acquire login lock after retries");
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
-}
-
-function shouldReloginStatus(status: number): boolean {
-  return status === 401 || status === 403;
 }
 
 function buildAuthHeaders(
@@ -90,72 +23,35 @@ function buildAuthHeaders(
 ): HeadersInit | undefined {
   const headers = new Headers(extra);
   if (session.synotoken) headers.set("X-SYNO-TOKEN", session.synotoken);
-  if (session.did) headers.set("X-SYNO-DID", session.did);
   const cookieParts: string[] = [];
   const existingCookie = headers.get("Cookie");
   if (existingCookie) cookieParts.push(existingCookie);
   if (session.sid) cookieParts.push(`id=${session.sid}`);
   if (session.synotoken) cookieParts.push(`synotoken=${session.synotoken}`);
-  if (session.did) cookieParts.push(`did=${session.did}`);
   if (cookieParts.length > 0) headers.set("Cookie", cookieParts.join("; "));
   return headers;
 }
 
-// Synology common error codes: insufficient privilege/invalid session=103, session timeout=106,
-// duplicated login=107, invalid session=119, source IP mismatch=150,
-// "system busy / network unstable" includes 109/110/111/117/118, generic auth failure=803.
-function isSessionError(code: number): boolean {
-  return (
-    code === 103 ||
-    code === 106 ||
-    code === 107 ||
-    code === 119 ||
-    code === 150 ||
-    code === 803
-  );
-}
-
+// Transient network errors that should trigger retry with backoff
 function isTransientNetworkError(code: number): boolean {
   return (
     code === 109 || code === 110 || code === 111 || code === 117 || code === 118
   );
 }
 
-async function getOrLoginSession(): Promise<SynologySession> {
-  const existing = await getStoredSession();
-  if (existing?.sid) return existing;
+/**
+ * Get or create a session for this request.
+ * Uses short-lived in-memory cache so parallel API calls share the same session.
+ * Login is protected by mutex so concurrent requests don't all try to login.
+ */
+async function getOrCreateSession(): Promise<SynologySession> {
+  return withLoginMutex(async () => {
+    // Double-check inside mutex (another request may have just logged in)
+    const existing = getSession();
+    if (existing) return existing;
 
-  console.log(`[synology] no session found, logging in`);
-  return await withLoginLock(async () => {
-    const again = await getStoredSession();
-    if (again?.sid) {
-      console.log(`[synology] session appeared while waiting for lock`);
-      return again;
-    }
-    console.log(`[synology] performing fresh login`);
+    console.log(`[synology] logging in`);
     return await login();
-  });
-}
-
-async function forceRelogin(staleVersion: number): Promise<SynologySession> {
-  return await withLoginLock(async () => {
-    const currentVersion = await getSessionVersion();
-    console.log(
-      `[synology] forceRelogin: staleVersion=${staleVersion}, currentVersion=${currentVersion}`,
-    );
-    if (currentVersion > staleVersion) {
-      const existing = await getStoredSession();
-      if (existing?.sid) {
-        console.log(`[synology] forceRelogin: using existing session`);
-        return existing;
-      }
-    }
-    const oldSession = await getStoredSession();
-    console.log(
-      `[synology] forceRelogin: performing login, preserving did=${oldSession?.did ? "yes" : "no"}`,
-    );
-    await incrementSessionVersion();
-    return await login(oldSession?.did);
   });
 }
 
@@ -166,32 +62,21 @@ function encodeParamValue(v: unknown): string {
 }
 
 type SynoCallOptions = {
-  endpoint?: "entry" | "auth";
   method?: "GET" | "POST";
   headers?: HeadersInit;
-  // Base Synology params:
   api: string;
   version: number;
   synoMethod: string;
-  // Any additional params required by the API call:
   params?: Record<string, unknown>;
-  // retries:
-  reloginRetries?: number; // default 1
   networkRetries?: number; // default 3
 };
 
 export async function synoCallJson<T>(opts: SynoCallOptions): Promise<T> {
-  const reloginRetries = opts.reloginRetries ?? 1;
   const networkRetries = opts.networkRetries ?? 3;
-
-  let reloginAttempts = 0;
   let networkAttempts = 0;
-  let sessionReset = false;
-  let usedLastResort = false;
 
   while (true) {
-    const sessionVersion = await getSessionVersion();
-    const session = await getOrLoginSession();
+    const session = await getOrCreateSession();
 
     const url = new URL(entryUrl());
     const q = url.searchParams;
@@ -218,15 +103,6 @@ export async function synoCallJson<T>(opts: SynoCallOptions): Promise<T> {
     try {
       json = (await res.json()) as SynologyResponse<T>;
     } catch {
-      if (shouldReloginStatus(res.status) && reloginAttempts < reloginRetries) {
-        reloginAttempts++;
-        console.log(
-          `[synology] non-JSON response (status=${res.status}) for ${opts.api}.${opts.synoMethod}, forcing relogin`,
-        );
-        await forceRelogin(sessionVersion);
-        continue;
-      }
-
       throw new SynologyApiError(
         `Synology API returned invalid response: ${opts.api}.${opts.synoMethod}`,
         res.status || undefined,
@@ -241,7 +117,8 @@ export async function synoCallJson<T>(opts: SynoCallOptions): Promise<T> {
     }
 
     const code = json.success ? undefined : json.error?.code;
-    if (json.success && !shouldReloginStatus(res.status)) {
+
+    if (json.success) {
       return json.data;
     }
 
@@ -249,34 +126,7 @@ export async function synoCallJson<T>(opts: SynoCallOptions): Promise<T> {
       `[synology] API error: ${opts.api}.${opts.synoMethod} code=${code} status=${res.status}`,
     );
 
-    const shouldRetrySession =
-      shouldReloginStatus(res.status) ||
-      (typeof code === "number" && isSessionError(code));
-
-    if (shouldRetrySession) {
-      console.log(
-        `[synology] session error ${code ?? res.status}, attempt ${reloginAttempts + 1}/${reloginRetries + 1}`,
-      );
-      if (reloginAttempts < reloginRetries) {
-        reloginAttempts++;
-        await forceRelogin(sessionVersion);
-        continue;
-      }
-      if (!sessionReset) {
-        sessionReset = true;
-        console.log(`[synology] clearing session and retrying fresh login`);
-        await incrementSessionVersion();
-        await clearSession();
-        continue;
-      }
-      if (!usedLastResort) {
-        usedLastResort = true;
-        console.log(`[synology] last-resort login for ${opts.api}.${opts.synoMethod}`);
-        await login();
-        continue;
-      }
-    }
-
+    // Retry transient network errors with backoff
     if (
       typeof code === "number" &&
       isTransientNetworkError(code) &&
@@ -284,8 +134,23 @@ export async function synoCallJson<T>(opts: SynoCallOptions): Promise<T> {
     ) {
       networkAttempts++;
       const backoff = Math.min(1500, 150 * 2 ** (networkAttempts - 1));
+      console.log(
+        `[synology] transient error ${code}, retry ${networkAttempts}/${networkRetries} after ${backoff}ms`,
+      );
       await sleep(backoff);
       continue;
+    }
+
+    // Clear session on auth errors so next request gets a fresh one
+    if (
+      res.status === 401 ||
+      res.status === 403 ||
+      code === 103 ||
+      code === 106 ||
+      code === 119 ||
+      code === 150
+    ) {
+      clearSession();
     }
 
     throw new SynologyApiError(
@@ -299,104 +164,55 @@ export async function synoCallJson<T>(opts: SynoCallOptions): Promise<T> {
 export async function synoCallRaw(
   opts: Omit<SynoCallOptions, "endpoint">,
 ): Promise<Response> {
-  const reloginRetries = opts.reloginRetries ?? 1;
-  let reloginAttempts = 0;
-  let sessionReset = false;
-  let usedLastResort = false;
+  const session = await getOrCreateSession();
 
-  while (true) {
-    const sessionVersion = await getSessionVersion();
-    const session = await getOrLoginSession();
+  const url = new URL(entryUrl());
+  const q = url.searchParams;
 
-    const url = new URL(entryUrl());
-    const q = url.searchParams;
+  q.set("api", opts.api);
+  q.set("version", String(opts.version));
+  q.set("method", opts.synoMethod);
+  q.set("_sid", session.sid);
 
-    q.set("api", opts.api);
-    q.set("version", String(opts.version));
-    q.set("method", opts.synoMethod);
-    q.set("_sid", session.sid);
+  if (session.synotoken) q.set("SynoToken", session.synotoken);
 
-    if (session.synotoken) q.set("SynoToken", session.synotoken);
-
-    if (opts.params) {
-      for (const [k, v] of Object.entries(opts.params))
-        q.set(k, encodeParamValue(v));
-    }
-
-    const res = await fetch(url.toString(), {
-      method: opts.method ?? "GET",
-      cache: "no-store",
-      headers: buildAuthHeaders(session, opts.headers),
-    });
-
-    if (shouldReloginStatus(res.status)) {
-      console.log(
-        `[synology] HTTP ${res.status} for ${opts.api}.${opts.synoMethod} (raw), attempt ${reloginAttempts + 1}/${reloginRetries + 1}`,
-      );
-      if (reloginAttempts < reloginRetries) {
-        reloginAttempts++;
-        await forceRelogin(sessionVersion);
-        continue;
-      }
-      if (!sessionReset) {
-        sessionReset = true;
-        console.log(`[synology] clearing session and retrying fresh login (raw)`);
-        await incrementSessionVersion();
-        await clearSession();
-        continue;
-      }
-      if (!usedLastResort) {
-        usedLastResort = true;
-        console.log(
-          `[synology] last-resort login for ${opts.api}.${opts.synoMethod} (raw)`,
-        );
-        await login();
-        continue;
-      }
-    }
-
-    // Some "download" APIs return JSON with success:false and an error code.
-    const contentType = res.headers.get("content-type") || "";
-    if (contentType.includes("application/json")) {
-      const json = (await res.json()) as SynologyResponse<unknown>;
-      const code = json.success ? undefined : json.error?.code;
-
-      if (typeof code === "number" && isSessionError(code)) {
-        console.log(
-          `[synology] session error ${code} for ${opts.api}.${opts.synoMethod} (raw), attempt ${reloginAttempts + 1}/${reloginRetries + 1}`,
-        );
-        if (reloginAttempts < reloginRetries) {
-          reloginAttempts++;
-          await forceRelogin(sessionVersion);
-          continue;
-        }
-        if (!sessionReset) {
-          sessionReset = true;
-          console.log(
-            `[synology] clearing session and retrying fresh login (raw, json error)`,
-          );
-          await incrementSessionVersion();
-          await clearSession();
-          continue;
-        }
-        if (!usedLastResort) {
-          usedLastResort = true;
-          console.log(
-            `[synology] last-resort login for ${opts.api}.${opts.synoMethod} (raw, json error)`,
-          );
-          await login();
-          continue;
-        }
-      }
-
-      if (!json.success) {
-        throw new SynologyApiError("Synology download failed", code);
-      }
-
-      // If it was JSON-success, just return a JSON response.
-      return Response.json(json);
-    }
-
-    return res;
+  if (opts.params) {
+    for (const [k, v] of Object.entries(opts.params))
+      q.set(k, encodeParamValue(v));
   }
+
+  const res = await fetch(url.toString(), {
+    method: opts.method ?? "GET",
+    cache: "no-store",
+    headers: buildAuthHeaders(session, opts.headers),
+  });
+
+  // Handle auth errors
+  if (res.status === 401 || res.status === 403) {
+    clearSession();
+    throw new SynologyApiError(
+      `Synology API auth failed: ${opts.api}.${opts.synoMethod}`,
+      res.status,
+    );
+  }
+
+  // Some "download" APIs return JSON with success:false and an error code
+  const contentType = res.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    const json = (await res.json()) as SynologyResponse<unknown>;
+    const code = json.success ? undefined : json.error?.code;
+
+    if (!json.success) {
+      // Clear session on auth errors
+      if (code === 103 || code === 106 || code === 119 || code === 150) {
+        clearSession();
+      }
+      throw new SynologyApiError("Synology download failed", code);
+    }
+
+    // If it was JSON-success, just return a JSON response
+    return Response.json(json);
+  }
+
+  return res;
 }

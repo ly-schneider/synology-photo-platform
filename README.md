@@ -23,23 +23,21 @@ Since Synology Photos provides a comprehensive API, this project bridges the gap
 - **Keyboard Navigation** - Use arrow keys to navigate, Escape to close (desktop)
 - **Download & Share** - Native share sheet integration for easy saving and sharing
 - **Progressive Web App** - Install on mobile devices for an app-like experience
-- **Centralized Session Management** - Uses Redis for shared authentication across all clients
+- **Serverless Ready** - Per-request authentication works seamlessly on Vercel and other serverless platforms
 
 ## How It Works
 
 This application acts as a lightweight frontend proxy to the Synology Photos API:
 
-1. **Authentication** - The app authenticates with Synology Photos using a dedicated user account
-2. **Session Storage** - Authentication sessions are stored in Redis, shared across all clients
-3. **API Proxy** - All photo requests are proxied through Next.js API routes to Synology Photos
-4. **Thumbnail Loading** - Efficient thumbnail loading with lazy loading for optimal performance
-5. **Direct Downloads** - Full-resolution image downloads directly from your Synology NAS
+1. **Per-Request Authentication** - Each API request authenticates with Synology Photos, avoiding session/IP binding issues on serverless platforms
+2. **API Proxy** - All photo requests are proxied through Next.js API routes to Synology Photos
+3. **Thumbnail Loading** - Efficient thumbnail loading with lazy loading and browser caching
+4. **Direct Downloads** - Full-resolution image downloads directly from your Synology NAS
 
 ## Tech Stack
 
 - **Framework**: [Next.js 16](https://nextjs.org/) with React 19
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/) with [Radix UI](https://radix-ui.com/) components
-- **Session Storage**: [Upstash Redis](https://upstash.com/)
 - **Deployment**: Optimized for [Vercel](https://vercel.com/)
 - **Package Manager**: pnpm
 
@@ -49,7 +47,6 @@ This application acts as a lightweight frontend proxy to the Synology Photos API
 
 - A Synology NAS with Synology Photos installed
 - A dedicated Synology user account for API access
-- An Upstash Redis account (free tier available)
 - Node.js 20+ and pnpm installed
 
 ### Setup
@@ -78,10 +75,6 @@ This application acts as a lightweight frontend proxy to the Synology Photos API
    Required environment variables:
 
    ```env
-   # Upstash Redis configuration (get from https://upstash.com/)
-   UPSTASH_REDIS_REST_URL=your_upstash_url
-   UPSTASH_REDIS_REST_TOKEN=your_upstash_token
-
    # Synology Photos configuration
    SYNOLOGY_PHOTO_BASE_URL=https://your-nas.example.com:5001
    SYNOLOGY_USERNAME=your_synology_username
@@ -141,16 +134,6 @@ You can control what content appears in the platform:
 
 These filters are enforced server-side, ensuring hidden content remains secure and inaccessible through the platform.
 
-### Redis Session Storage
-
-The app uses Upstash Redis to store Synology authentication sessions. This enables:
-
-- Shared sessions across all users
-- Reduced authentication requests to your NAS
-- Improved performance and reliability
-
-The free Redis database tier should suffice for most use cases. Get yours at [upstash.com](https://upstash.com/).
-
 ## Development
 
 ### Available Scripts
@@ -169,17 +152,16 @@ pnpm prettier     # Format code with Prettier
 ```
 synology-photo-platform/
 ├── app/                    # Next.js app directory
-│   ├── api/               # API routes (Synology proxy)
-│   │   ├── collections/  # Folder/collection endpoints
-│   │   └── items/        # Photo item endpoints
-│   ├── page.tsx          # Main gallery page
-│   └── layout.tsx        # App layout
-├── components/            # Reusable UI components
-├── lib/                   # Core library code
-│   ├── api/              # API utilities and filters
-│   ├── synology/         # Synology API client and auth
-│   └── redis.ts          # Redis connection
-└── public/               # Static assets
+│   ├── api/                # API routes (Synology proxy)
+│   │   ├── collections/    # Folder/collection endpoints
+│   │   └── items/          # Photo item endpoints
+│   ├── page.tsx            # Main gallery page
+│   └── layout.tsx          # App layout
+├── components/             # Reusable UI components
+├── lib/                    # Core library code
+│   ├── api/                # API utilities and filters
+│   └── synology/           # Synology API client and auth
+└── public/                 # Static assets
 ```
 
 ## How You Can Use This
@@ -203,7 +185,7 @@ Perfect for:
 
 - The Synology credentials are stored as environment variables and never exposed to the client
 - All API requests are proxied through Next.js API routes
-- Session data is securely stored in Redis with automatic expiration
+- Per-request authentication ensures no session data is persisted between requests
 - Use HTTPS in production (automatic with Vercel)
 - Consider restricting access to specific photo folders in your Synology user permissions
 

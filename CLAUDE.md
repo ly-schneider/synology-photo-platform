@@ -20,8 +20,6 @@ This is a Next.js 16 + React 19 photo gallery frontend that proxies the Synology
 
 ```
 Client Components → Next.js API Routes → Synology Photos API
-                         ↓
-                    Redis (session storage)
 ```
 
 ### Key Layers
@@ -33,9 +31,9 @@ Client Components → Next.js API Routes → Synology Photos API
 
 **Synology Client (`lib/synology/`)**: Handles all Synology API communication
 
-- `client.ts` - Core API caller with session management, auto-relogin on session errors
+- `client.ts` - Core API caller with per-request authentication
 - `auth.ts` - Login flow using `SYNO.API.Auth`
-- `sessionStore.ts` - Redis-backed session persistence with distributed lock
+- `sessionStore.ts` - Short-lived in-memory session cache (5s TTL) with login mutex
 
 **Visibility Filtering (`lib/api/`)**: Server-side content filtering
 
@@ -67,10 +65,6 @@ Required for Synology connection:
 
 - `SYNOLOGY_PHOTO_BASE_URL` - NAS URL (e.g., `https://nas.example.com:5001`)
 - `SYNOLOGY_USERNAME`, `SYNOLOGY_PASSWORD` - Dedicated Synology user credentials
-
-Required for session storage:
-
-- `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`
 
 Optional:
 

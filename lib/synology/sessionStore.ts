@@ -1,52 +1,61 @@
-import { redis } from "@/lib/redis";
 import type { SynologySession } from "./types";
 
-const SESSION_KEY = "synology:session";
-const SESSION_VERSION_KEY = "synology:session:version";
-export const USE_SHARED_SESSION =
-  process.env.SYNOLOGY_USE_SHARED_SESSION !== "false";
+/**
+ * Simple in-memory session store with short TTL and login mutex.
+ *
+ * Per-request authentication strategy:
+ * - Sessions live only 5 seconds (enough for parallel API calls within one request)
+ * - No Redis storage - avoids cross-IP session sharing issues with Vercel
+ * - Login mutex ensures only one login happens at a time
+ */
 
-const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 24; // 24h
+const SESSION_TTL_MS = 5000; // 5 seconds
 
-let memorySession: SynologySession | null = null;
-let memoryVersion = 0;
+let cachedSession: SynologySession | null = null;
+let sessionExpiresAt = 0;
 
-export async function getStoredSession(): Promise<SynologySession | null> {
-  if (!USE_SHARED_SESSION) return memorySession;
-  const session = await redis.get<SynologySession>(SESSION_KEY);
-  return session ?? null;
-}
+// Mutex: if a login is in progress, this holds the promise
+let loginInProgress: Promise<SynologySession> | null = null;
 
-export async function storeSession(
-  session: SynologySession,
-  ttlSeconds: number = DEFAULT_SESSION_TTL_SECONDS,
-): Promise<void> {
-  if (!USE_SHARED_SESSION) {
-    memorySession = session;
-    return;
+export function getSession(): SynologySession | null {
+  if (cachedSession && Date.now() < sessionExpiresAt) {
+    return cachedSession;
   }
-  await redis.set(SESSION_KEY, session, { ex: ttlSeconds });
+  // Session expired or doesn't exist
+  cachedSession = null;
+  return null;
 }
 
-export async function getSessionVersion(): Promise<number> {
-  if (!USE_SHARED_SESSION) return memoryVersion;
-  const version = await redis.get<number>(SESSION_VERSION_KEY);
-  return version ?? 0;
+export function setSession(session: SynologySession): void {
+  cachedSession = session;
+  sessionExpiresAt = Date.now() + SESSION_TTL_MS;
 }
 
-export async function incrementSessionVersion(): Promise<number> {
-  if (!USE_SHARED_SESSION) {
-    memoryVersion += 1;
-    return memoryVersion;
+export function clearSession(): void {
+  cachedSession = null;
+  sessionExpiresAt = 0;
+}
+
+/**
+ * Execute a login function with mutex protection.
+ * If a login is already in progress, wait for it instead of starting another.
+ */
+export async function withLoginMutex(
+  loginFn: () => Promise<SynologySession>,
+): Promise<SynologySession> {
+  // Check if we already have a valid session
+  const existing = getSession();
+  if (existing) return existing;
+
+  // If login is in progress, wait for it
+  if (loginInProgress) {
+    return loginInProgress;
   }
-  return await redis.incr(SESSION_VERSION_KEY);
-}
 
-export async function clearSession(): Promise<void> {
-  if (!USE_SHARED_SESSION) {
-    memorySession = null;
-    memoryVersion = 0;
-    return;
-  }
-  await redis.del(SESSION_KEY);
+  // Start login and store the promise so others can wait
+  loginInProgress = loginFn().finally(() => {
+    loginInProgress = null;
+  });
+
+  return loginInProgress;
 }

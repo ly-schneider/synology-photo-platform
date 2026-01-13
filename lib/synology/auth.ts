@@ -1,4 +1,4 @@
-import { storeSession } from "./sessionStore";
+import { setSession } from "./sessionStore";
 import type { SynologyResponse, SynologySession } from "./types";
 import { SynologyApiError } from "./types";
 
@@ -18,7 +18,7 @@ function env(name: string): string {
   return v;
 }
 
-async function loginOnce(existingDid?: string): Promise<SynologySession> {
+export async function login(): Promise<SynologySession> {
   const params = new URLSearchParams();
   params.set("api", "SYNO.API.Auth");
   params.set("version", "7");
@@ -27,12 +27,6 @@ async function loginOnce(existingDid?: string): Promise<SynologySession> {
   params.set("passwd", env("SYNOLOGY_PASSWORD"));
   params.set("format", "sid");
   params.set("enable_syno_token", "yes");
-  params.set("enable_device_token", "yes");
-  params.set("device_name", "synology-photo-platform");
-
-  if (existingDid) {
-    params.set("device_id", existingDid);
-  }
 
   const res = await fetch(authUrl(), {
     method: "POST",
@@ -44,7 +38,6 @@ async function loginOnce(existingDid?: string): Promise<SynologySession> {
   const json = (await res.json()) as SynologyResponse<{
     sid?: string;
     synotoken?: string;
-    did?: string;
   }>;
 
   if (!json.success) {
@@ -59,25 +52,14 @@ async function loginOnce(existingDid?: string): Promise<SynologySession> {
   const session: SynologySession = {
     sid: json.data.sid,
     synotoken: json.data.synotoken,
-    did: json.data.did ?? existingDid,
     createdAt: now,
     updatedAt: now,
   };
 
   console.log(
-    `[synology] login success sid=${session.sid ? "yes" : "no"} synotoken=${session.synotoken ? "yes" : "no"} did=${session.did ? "yes" : "no"}`,
+    `[synology] login success sid=${session.sid ? "yes" : "no"} synotoken=${session.synotoken ? "yes" : "no"}`,
   );
 
-  await storeSession(session);
+  setSession(session);
   return session;
-}
-
-export async function login(existingDid?: string): Promise<SynologySession> {
-  let lastErr: unknown;
-  try {
-    return await loginOnce(existingDid);
-  } catch (e) {
-    lastErr = e;
-  }
-  throw lastErr instanceof Error ? lastErr : new Error("Synology login failed");
 }

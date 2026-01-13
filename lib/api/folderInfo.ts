@@ -10,44 +10,19 @@ export async function fetchFolderInfoWithFallback(
 ): Promise<SynoCollection | null> {
   const idParam = parseNumericId(collectionId);
 
-  // Try getinfo first
-  try {
-    const data = await synoCallJson<unknown>({
-      api: "SYNO.FotoTeam.Browse.Folder",
-      version: 1,
-      synoMethod: "getinfo",
-      params: { ...params, id: idParam },
-    });
-    const info = extractSingle(data);
-    if (info) return info;
-  } catch (err) {
-    if (!(err instanceof SynologyApiError)) throw err;
-  }
-
-  // Fall back to list_parents
+  // Use list_parents - more reliable than getinfo which often fails with permission errors
   try {
     const data = await synoCallJson<unknown>({
       api: "SYNO.FotoTeam.Browse.Folder",
       version: 1,
       synoMethod: "list_parents",
-      params: { id: idParam },
+      params: { ...params, id: idParam },
     });
     return extractFolderFromParents(data, collectionId);
   } catch (err) {
     if (!(err instanceof SynologyApiError)) throw err;
   }
 
-  return null;
-}
-
-function extractSingle(data: unknown): SynoCollection | null {
-  const record = readRecord(data);
-  if (Array.isArray(record?.list) && record.list.length > 0) {
-    return record.list[0] as SynoCollection;
-  }
-  if (record?.info && typeof record.info === "object") {
-    return record.info as SynoCollection;
-  }
   return null;
 }
 
