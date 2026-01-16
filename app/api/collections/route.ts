@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { handleApiError } from "@/lib/api/errors";
 import { assertVisibleFolder, filterVisibleFolders } from "@/lib/api/filtering";
+import { assertFolderWithinBoundary } from "@/lib/api/folderBoundary";
 import { fetchFolderInfoWithFallback } from "@/lib/api/folderInfo";
 import {
   extractList,
@@ -9,6 +10,7 @@ import {
   parseNumberParam,
 } from "@/lib/api/mappers";
 import type { Collection } from "@/lib/api/proxyUtils";
+import { getRootFolderId } from "@/lib/api/visibilityConfig";
 import { sortCollectionsByName } from "@/lib/sorting";
 import { synoCallJson } from "@/lib/synology/client";
 
@@ -34,10 +36,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
 
     const targetId = synoMethod === "list" ? synoParams.id : null;
+    const folderInfoParams: Record<string, unknown> = {};
+    const passphrase = params.get("passphrase");
+    if (passphrase) folderInfoParams.passphrase = passphrase;
+
     if (targetId !== null && targetId !== undefined) {
-      const folderInfoParams: Record<string, unknown> = {};
-      const passphrase = params.get("passphrase");
-      if (passphrase) folderInfoParams.passphrase = passphrase;
+      // Verify the folder is within the allowed boundary
+      await assertFolderWithinBoundary(
+        String(targetId),
+        folderInfoParams,
+        "Collection not found",
+      );
+
       const folderInfo = await fetchFolderInfoWithFallback(
         folderInfoParams,
         String(targetId),
@@ -103,12 +113,16 @@ function buildFolderListRequest(
   synoMethod: "list" | "list_parents";
   synoParams: Record<string, unknown>;
 } {
-  const rootId = process.env.SYNOLOGY_ROOT_FOLDER_ID;
+  const rootId = getRootFolderId();
+  const requestedId = params.get("id");
+
+  // When a root folder is configured, always use "list" method
+  // and force navigation to start from the root
   const hasListParams =
     Boolean(rootId) ||
+    Boolean(requestedId) ||
     params.has("offset") ||
     params.has("limit") ||
-    params.has("id") ||
     params.has("sort_by") ||
     params.has("sort_direction");
 
@@ -117,7 +131,9 @@ function buildFolderListRequest(
   }
 
   const synoParams: Record<string, unknown> = { offset, limit };
-  const idValue = params.get("id") ?? rootId ?? "1";
+
+  // Use requested ID, falling back to root folder ID if configured
+  const idValue = requestedId ?? rootId ?? "1";
   if (idValue !== null && idValue !== undefined && idValue !== "") {
     const numeric = Number(idValue);
     synoParams.id = Number.isFinite(numeric) ? numeric : idValue;

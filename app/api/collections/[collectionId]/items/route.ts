@@ -7,6 +7,7 @@ import {
   filterVisibleFolders,
   filterVisibleItems,
 } from "@/lib/api/filtering";
+import { assertFolderWithinBoundary } from "@/lib/api/folderBoundary";
 import { fetchFolderInfoWithFallback } from "@/lib/api/folderInfo";
 import {
   extractList,
@@ -73,6 +74,13 @@ export async function GET(
     const folderInfoParams: Record<string, unknown> = passphrase
       ? { passphrase }
       : {};
+
+    // Verify the folder is within the allowed boundary
+    await assertFolderWithinBoundary(
+      collectionId,
+      folderInfoParams,
+      "Collection not found",
+    );
 
     const [folderInfo, folderData, itemData] = await Promise.all([
       fetchFolderInfoWithFallback(folderInfoParams, collectionId),

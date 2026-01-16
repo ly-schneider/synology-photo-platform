@@ -1,6 +1,8 @@
 import { notFound } from "@/lib/api/errors";
 import { assertVisibleItem } from "@/lib/api/filtering";
+import { isFolderWithinBoundary } from "@/lib/api/folderBoundary";
 import { parseNumericId, readRecord } from "@/lib/api/mappers";
+import { hasRootFolderBoundary } from "@/lib/api/visibilityConfig";
 import { synoCallJson } from "@/lib/synology/client";
 import { SynologyApiError } from "@/lib/synology/types";
 
@@ -24,11 +26,23 @@ const folderItemCache = new Map<
 export async function fetchVisibleItemInfo(
   options: FetchVisibleItemInfoOptions,
 ): Promise<SynoItem> {
-  const { notFoundMessage = "Item not found" } = options;
+  const { notFoundMessage = "Item not found", passphrase } = options;
   const additional = ensureTagIncluded(options.additional);
 
   const item = await fetchItemInfo({ ...options, additional });
   if (!item) throw notFound(notFoundMessage);
+
+  // Verify the item's folder is within the allowed boundary
+  if (hasRootFolderBoundary()) {
+    const itemFolderId = extractItemFolderId(item);
+    if (itemFolderId) {
+      const params = passphrase ? { passphrase } : undefined;
+      const withinBoundary = await isFolderWithinBoundary(itemFolderId, params);
+      if (!withinBoundary) {
+        throw notFound(notFoundMessage);
+      }
+    }
+  }
 
   assertVisibleItem(item, notFoundMessage);
   return item;
@@ -178,4 +192,10 @@ async function loadFolderItems(options: {
   }
 
   return items;
+}
+
+function extractItemFolderId(item: SynoItem): string | null {
+  const folderId = item.folder_id ?? item.folderId ?? item.parent_folder_id;
+  if (folderId === null || folderId === undefined) return null;
+  return String(folderId);
 }
