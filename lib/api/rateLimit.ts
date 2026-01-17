@@ -27,12 +27,21 @@ function validatePipelineResults(
   }
 
   for (const item of results) {
-    if (Array.isArray(item) && item.length > 0 && item[0]) {
-      const err = item[0];
-      if (err instanceof Error) {
-        throw err;
+    // Upstash pipeline results are typically [error, result] tuples.
+    if (Array.isArray(item)) {
+      const [err] = item as [unknown, unknown];
+      if (err) {
+        if (err instanceof Error) {
+          throw err;
+        }
+        throw new Error(String(err));
       }
-      throw new Error(String(err));
+      continue;
+    }
+
+    // Be defensive in case an Error is returned directly.
+    if (item instanceof Error) {
+      throw item;
     }
   }
 }
