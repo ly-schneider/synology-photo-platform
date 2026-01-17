@@ -3,9 +3,7 @@ import { NextRequest } from "next/server";
 import { redis } from "@/lib/redis";
 
 type RateLimitConfig = {
-  /** Maximum number of requests allowed in the window */
   limit: number;
-  /** Time window in seconds */
   windowSeconds: number;
 };
 
@@ -15,18 +13,36 @@ type RateLimitResult = {
   resetAt: number;
 };
 
-/**
- * Get client identifier from request (IP address or forwarded IP)
- */
-function getClientId(request: NextRequest): string {
+export function getClientId(request: NextRequest): string {
   const forwarded = request.headers.get("x-forwarded-for");
   const ip = forwarded ? forwarded.split(",")[0].trim() : "unknown";
   return ip;
 }
 
-/**
- * Simple sliding window rate limiter using Redis
- */
+function validatePipelineResults(
+  results: unknown[] | null,
+): asserts results is unknown[] {
+  if (!results) {
+    throw new Error("Redis pipeline execution returned no results");
+  }
+
+  for (const item of results) {
+    if (Array.isArray(item) && item.length > 0 && item[0]) {
+      const err = item[0];
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error(String(err));
+    }
+  }
+}
+
+function parseNumberResult(entry: unknown): number {
+  const value = Array.isArray(entry) ? entry[1] : entry;
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export async function checkRateLimit(
   request: NextRequest,
   key: string,
@@ -37,48 +53,17 @@ export async function checkRateLimit(
   const now = Math.floor(Date.now() / 1000);
   const windowStart = now - config.windowSeconds;
 
-  // Use a transaction to atomically check and update
-  const pipeline = redis.pipeline();
+  const cleanupPipeline = redis.pipeline();
 
-  // Remove old entries outside the window
-  pipeline.zremrangebyscore(rateLimitKey, 0, windowStart);
+  cleanupPipeline.zremrangebyscore(rateLimitKey, 0, windowStart);
+  cleanupPipeline.zcard(rateLimitKey);
+  cleanupPipeline.expire(rateLimitKey, config.windowSeconds);
 
-  // Count current entries in the window
-  pipeline.zcard(rateLimitKey);
+  const cleanupResults = await cleanupPipeline.exec();
+  validatePipelineResults(cleanupResults);
 
-  // Add current request timestamp
-  pipeline.zadd(rateLimitKey, {
-    score: now,
-    member: `${now}:${Math.random()}`,
-  });
-
-  // Set expiry on the key
-  pipeline.expire(rateLimitKey, config.windowSeconds);
-
-  const results = await pipeline.exec();
-
-  if (!results) {
-    throw new Error("Redis pipeline execution returned no results");
-  }
-
-  // Some Redis clients (e.g., ioredis) return [error, result] tuples for each command.
-  // Check for any command-level errors before proceeding.
-  for (const item of results as unknown[]) {
-    if (Array.isArray(item) && item.length > 0 && item[0]) {
-      const err = item[0];
-      if (err instanceof Error) {
-        throw err;
-      }
-      throw new Error(String(err));
-    }
-  }
-
-  // zcard result is at index 1; support both tuple and plain-result formats
-  const zcardResultEntry = results[1] as unknown;
-  const currentCount =
-    (Array.isArray(zcardResultEntry)
-      ? (zcardResultEntry[1] as number)
-      : (zcardResultEntry as number)) || 0;
+  const zcardResultEntry = cleanupResults[1] as unknown;
+  const currentCount = parseNumberResult(zcardResultEntry);
   const resetAt = now + config.windowSeconds;
 
   if (currentCount >= config.limit) {
@@ -88,6 +73,16 @@ export async function checkRateLimit(
       resetAt,
     };
   }
+
+  const addPipeline = redis.pipeline();
+  addPipeline.zadd(rateLimitKey, {
+    score: now,
+    member: `${now}:${Math.random()}`,
+  });
+  addPipeline.expire(rateLimitKey, config.windowSeconds);
+
+  const addResults = await addPipeline.exec();
+  validatePipelineResults(addResults);
 
   return {
     success: true,

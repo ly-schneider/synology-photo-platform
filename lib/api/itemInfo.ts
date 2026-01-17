@@ -33,11 +33,8 @@ export async function fetchVisibleItemInfo(
   const item = await fetchItemInfo({ ...options, additional });
   if (!item) throw notFound(notFoundMessage);
 
-  // Verify the item's folder is within the allowed boundary
   if (hasRootFolderBoundary()) {
     const itemFolderId = extractItemFolderId(item);
-    // When a root folder boundary is configured, items without a folder ID
-    // must not bypass the boundary check.
     if (itemFolderId == null) {
       throw notFound(notFoundMessage);
     }
@@ -48,17 +45,13 @@ export async function fetchVisibleItemInfo(
     }
   }
 
-  assertVisibleItem(item, notFoundMessage);
-
-  // Check if item has been reported
   const itemId = (item.id ?? item.unit_id ?? item.item_id ?? item.photo_id) as
     | string
     | number
     | undefined
     | null;
 
-  // If we cannot determine a stable identifier for the item, treat it as not found
-  // to avoid bypassing the reported-items filter.
+  // Treat unknown identifiers as not found to avoid bypassing the reported-items filter.
   if (itemId == null) {
     throw notFound(notFoundMessage);
   }
@@ -66,6 +59,8 @@ export async function fetchVisibleItemInfo(
   if (await isItemReported(String(itemId))) {
     throw notFound(notFoundMessage);
   }
+
+  assertVisibleItem(item, notFoundMessage);
   return item;
 }
 
@@ -75,7 +70,6 @@ async function fetchItemInfo(
   const { itemId, passphrase, additional, folderId } = options;
   const idString = String(parseNumericId(itemId));
 
-  // Try folder scan if folderId provided (most common path)
   if (folderId) {
     const item = await findItemInFolder({
       itemId: idString,
@@ -86,7 +80,6 @@ async function fetchItemInfo(
     if (item) return item;
   }
 
-  // Fall back to direct getinfo
   const params: Record<string, unknown> = {
     id: parseNumericId(itemId),
     additional,
@@ -146,13 +139,11 @@ async function findItemInFolder(options: {
   const cacheKey = buildCacheKey(folderId, passphrase, additional);
   const now = Date.now();
 
-  // Check cache
   const cached = folderItemCache.get(cacheKey);
   if (cached && cached.expiresAt > now) {
     return cached.items.get(itemId) ?? null;
   }
 
-  // Load folder items
   try {
     const items = await loadFolderItems({ folderId, passphrase, additional });
     folderItemCache.set(cacheKey, {

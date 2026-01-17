@@ -1,21 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { ApiError, handleApiError } from "@/lib/api/errors";
-import { checkRateLimit } from "@/lib/api/rateLimit";
+import { checkRateLimit, getClientId } from "@/lib/api/rateLimit";
 import { redis } from "@/lib/redis";
 
-// Rate limit: 10 reports per minute per IP
 const RATE_LIMIT_CONFIG = {
   limit: 10,
   windowSeconds: 60,
 };
 
-// Duplicate prevention: 1 report per item per IP per hour
 const DUPLICATE_WINDOW_SECONDS = 3600;
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    // Check rate limit
     const rateLimitResult = await checkRateLimit(
       request,
       "reports",
@@ -47,14 +44,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       throw new ApiError(400, "BAD_REQUEST", "itemId is required");
     }
 
-    // Check for duplicate report from same IP for same item
-    const forwarded = request.headers.get("x-forwarded-for");
-    const clientIp = forwarded ? forwarded.split(",")[0].trim() : "unknown";
+    const clientIp = getClientId(request);
     const duplicateKey = `photo:report_duplicate:${itemId}:${clientIp}`;
 
     const isDuplicate = await redis.exists(duplicateKey);
     if (isDuplicate) {
-      // Silently accept but don't store duplicate
       return NextResponse.json(
         { success: true, reportId: "duplicate" },
         { status: 201 },
@@ -64,9 +58,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const sanitizedFilename =
       typeof filename === "string"
         ? filename
-            // Remove control characters (including null bytes) and angle brackets
             .replace(/[\x00-\x1F\x7F<>]/g, "")
-            // Normalize whitespace and trim
             .replace(/\s+/g, " ")
             .trim() || null
         : null;

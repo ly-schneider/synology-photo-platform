@@ -4,18 +4,23 @@ import { ApiError, handleApiError } from "@/lib/api/errors";
 import { storeFeedback } from "@/lib/api/feedback";
 import { checkRateLimit } from "@/lib/api/rateLimit";
 
-// Rate limit: 5 feedback submissions per minute per IP
 const RATE_LIMIT_CONFIG = {
   limit: 5,
   windowSeconds: 60,
 };
 
-// Maximum message length
 const MAX_MESSAGE_LENGTH = 5000;
+
+function sanitizeFeedbackMessage(raw: string): string {
+  const withoutControlChars = raw.replace(
+    /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g,
+    "",
+  );
+  return withoutControlChars.trim();
+}
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    // Check rate limit
     const rateLimitResult = await checkRateLimit(
       request,
       "feedback",
@@ -51,9 +56,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       throw new ApiError(400, "BAD_REQUEST", "message is required");
     }
 
-    const trimmedMessage = message.trim();
+    const sanitizedMessage = sanitizeFeedbackMessage(message);
 
-    if (trimmedMessage.length > MAX_MESSAGE_LENGTH) {
+    if (sanitizedMessage.length === 0) {
+      throw new ApiError(400, "BAD_REQUEST", "message is required");
+    }
+
+    if (sanitizedMessage.length > MAX_MESSAGE_LENGTH) {
       throw new ApiError(
         400,
         "BAD_REQUEST",
@@ -62,7 +71,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     await storeFeedback({
-      message: trimmedMessage,
+      message: sanitizedMessage,
       createdAt: new Date().toISOString(),
       userAgent: request.headers.get("user-agent") || "unknown",
     });
