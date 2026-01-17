@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { handleApiError, notFound } from "@/lib/api/errors";
 import { assertVisibleFolder } from "@/lib/api/filtering";
+import { assertFolderWithinBoundary } from "@/lib/api/folderBoundary";
 import { fetchFolderInfoWithFallback } from "@/lib/api/folderInfo";
 import { mapCollection } from "@/lib/api/mappers";
 
@@ -14,6 +15,13 @@ export async function GET(
     const origin = request.nextUrl.origin;
     const searchParams = Object.fromEntries(
       request.nextUrl.searchParams.entries(),
+    );
+
+    // Verify the folder is within the allowed boundary
+    await assertFolderWithinBoundary(
+      collectionId,
+      searchParams,
+      "Collection not found",
     );
 
     const entry = await fetchFolderInfoWithFallback(searchParams, collectionId);

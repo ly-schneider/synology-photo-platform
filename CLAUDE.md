@@ -38,8 +38,11 @@ Client Components → Next.js API Routes → Synology Photos API
 **Visibility Filtering (`lib/api/`)**: Server-side content filtering
 
 - Folders ending with `(hide)` are excluded from listings
-- Items tagged with `hide` in Synology Photos are filtered out
-- Enforced in `visibility.ts` and `filtering.ts`
+- Configurable visibility mode for items (`PHOTO_VISIBILITY_MODE`):
+  - `hide` mode (default): All photos visible, tag with "hide" to exclude
+  - `show` mode: No photos visible by default, tag with "show" to include
+- Root folder boundary: `SYNOLOGY_ROOT_FOLDER_ID` restricts navigation to a subtree
+- Enforced in `visibilityConfig.ts`, `filtering.ts`, and `folderBoundary.ts`
 
 ### Frontend Components
 
@@ -68,5 +71,6 @@ Required for Synology connection:
 
 Optional:
 
-- `SYNOLOGY_ROOT_FOLDER_ID` - Starting folder ID (defaults to listing all accessible folders)
+- `SYNOLOGY_ROOT_FOLDER_ID` - Starting folder ID, restricts users to this folder and subfolders only
+- `PHOTO_VISIBILITY_MODE` - Photo visibility mode: "hide" (default) or "show"
 - `NEXT_PUBLIC_TITLE`, `NEXT_PUBLIC_SHORT_TITLE` - App branding

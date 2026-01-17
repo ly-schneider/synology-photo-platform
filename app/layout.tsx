@@ -1,3 +1,4 @@
+import Footer from "@/components/footer";
 import { A2HSNudge } from "@/components/pwa/a2hs-nudge";
 import ServiceWorker from "@/components/pwa/service-worker";
 import { Metadata, Viewport } from "next";
@@ -112,6 +113,7 @@ export default function RootLayout({
     <html lang="de" className={geistSans.variable}>
       <body className="bg-background text-foreground overflow-x-hidden flex flex-col min-h-screen">
         {children}
+        <Footer />
         <ServiceWorker />
         <A2HSNudge />
       </body>

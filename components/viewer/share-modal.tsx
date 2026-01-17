@@ -94,11 +94,15 @@ export function ShareModal({ item, onClose }: ShareModalProps) {
             <p className="text-center text-sm text-white/70">
               {isIOS ? (
                 <>
-                  Tippe <span className="font-medium text-white">Bild sichern</span>
+                  Tippe{" "}
+                  <span className="font-medium text-white">Bild sichern</span>
                 </>
               ) : (
                 <>
-                  Bild wird <span className="font-medium text-white">heruntergeladen</span>
+                  Bild wird{" "}
+                  <span className="font-medium text-white">
+                    heruntergeladen
+                  </span>
                 </>
               )}
             </p>

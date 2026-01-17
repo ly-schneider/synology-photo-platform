@@ -26,6 +26,6 @@ export function usePlatform(): Platform {
   return useSyncExternalStore(
     subscribe,
     getPlatform,
-    () => "other" // Server snapshot
+    () => "other", // Server snapshot
   );
 }

@@ -17,7 +17,8 @@ export default function CollectionPage({ params }: CollectionPageProps) {
   const { path } = use(params);
   const currentCollectionId = path[path.length - 1];
 
-  const { folders, items, isLoading } = useCollectionItems(currentCollectionId);
+  const { folders, items, isLoading, removeItem } =
+    useCollectionItems(currentCollectionId);
 
   const viewer = usePhotoViewer(items.length);
   const currentItem =
@@ -34,6 +35,11 @@ export default function CollectionPage({ params }: CollectionPageProps) {
 
   const handleFolderClick = (folder: Collection) => {
     router.push(`/collection/${path.join("/")}/${folder.id}`);
+  };
+
+  const handleReportSuccess = (itemId: string) => {
+    removeItem(itemId);
+    viewer.close();
   };
 
   return (
@@ -58,6 +64,7 @@ export default function CollectionPage({ params }: CollectionPageProps) {
           onPrevious={viewer.goToPrevious}
           onNext={viewer.goToNext}
           onImageLoad={viewer.onImageLoad}
+          onReportSuccess={handleReportSuccess}
         />
       )}
     </main>

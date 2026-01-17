@@ -1,8 +1,10 @@
 import { notFound } from "@/lib/api/errors";
+import { getVisibilityMode } from "@/lib/api/visibilityConfig";
 
 type SynoRecord = Record<string, unknown>;
 
 const HIDE_TAG = "hide";
+const SHOW_TAG = "show";
 const HIDE_SUFFIX = "(hide)";
 
 export function isHiddenFolderEntry(entry: SynoRecord): boolean {
@@ -15,6 +17,27 @@ export function isHiddenFolderEntry(entry: SynoRecord): boolean {
 export function hasHideTag(entry: SynoRecord): boolean {
   const candidates = collectTagCandidates(entry);
   return candidates.some((candidate) => matchesTagName(candidate, HIDE_TAG));
+}
+
+export function hasShowTag(entry: SynoRecord): boolean {
+  const candidates = collectTagCandidates(entry);
+  return candidates.some((candidate) => matchesTagName(candidate, SHOW_TAG));
+}
+
+/**
+ * Check if an item should be hidden based on the current visibility mode.
+ *
+ * In "hide" mode: Items are visible by default, hidden if they have the "hide" tag.
+ * In "show" mode: Items are hidden by default, visible only if they have the "show" tag.
+ */
+export function isItemHidden(entry: SynoRecord): boolean {
+  const mode = getVisibilityMode();
+  if (mode === "show") {
+    // Show mode: only items with "show" tag are visible
+    return !hasShowTag(entry);
+  }
+  // Hide mode: items with "hide" tag are hidden
+  return hasHideTag(entry);
 }
 
 export function ensureAdditionalIncludes(
@@ -55,7 +78,7 @@ export function assertVisibleItem(
   entry: SynoRecord,
   message = "Item not found",
 ): void {
-  if (hasHideTag(entry)) {
+  if (isItemHidden(entry)) {
     throw notFound(message);
   }
 }
@@ -65,7 +88,7 @@ export function filterVisibleFolders<T extends SynoRecord>(entries: T[]): T[] {
 }
 
 export function filterVisibleItems<T extends SynoRecord>(entries: T[]): T[] {
-  return entries.filter((entry) => !hasHideTag(entry));
+  return entries.filter((entry) => !isItemHidden(entry));
 }
 
 function parseAdditionalList(value: string): string[] | null {

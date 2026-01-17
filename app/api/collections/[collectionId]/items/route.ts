@@ -7,6 +7,7 @@ import {
   filterVisibleFolders,
   filterVisibleItems,
 } from "@/lib/api/filtering";
+import { assertFolderWithinBoundary } from "@/lib/api/folderBoundary";
 import { fetchFolderInfoWithFallback } from "@/lib/api/folderInfo";
 import {
   extractList,
@@ -16,6 +17,10 @@ import {
   parseNumericId,
 } from "@/lib/api/mappers";
 import type { Collection, Item } from "@/lib/api/proxyUtils";
+import {
+  excludeReportedItems,
+  getReportedItemIds,
+} from "@/lib/api/reportedItems";
 import { sortCollectionContents } from "@/lib/sorting";
 import { synoCallJson } from "@/lib/synology/client";
 
@@ -74,6 +79,13 @@ export async function GET(
       ? { passphrase }
       : {};
 
+    // Verify the folder is within the allowed boundary
+    await assertFolderWithinBoundary(
+      collectionId,
+      folderInfoParams,
+      "Collection not found",
+    );
+
     const [folderInfo, folderData, itemData] = await Promise.all([
       fetchFolderInfoWithFallback(folderInfoParams, collectionId),
       synoCallJson<unknown>({
@@ -100,9 +112,13 @@ export async function GET(
       .filter(Boolean) as Collection[];
 
     const { list: itemList, total: itemTotal } = extractList(itemData);
-    const mappedItems = filterVisibleItems(itemList)
-      .map((entry) => mapItem(entry, origin, collectionId))
-      .filter(Boolean) as Item[];
+    const reportedIds = await getReportedItemIds();
+    const mappedItems = excludeReportedItems(
+      filterVisibleItems(itemList)
+        .map((entry) => mapItem(entry, origin, collectionId))
+        .filter(Boolean) as Item[],
+      reportedIds,
+    );
 
     const shouldSortByName =
       !sortByParam || sortByParam === "name" || sortByParam === "filename";

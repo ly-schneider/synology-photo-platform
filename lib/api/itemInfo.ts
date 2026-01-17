@@ -1,6 +1,9 @@
 import { notFound } from "@/lib/api/errors";
 import { assertVisibleItem } from "@/lib/api/filtering";
+import { isFolderWithinBoundary } from "@/lib/api/folderBoundary";
 import { parseNumericId, readRecord } from "@/lib/api/mappers";
+import { isItemReported } from "@/lib/api/reportedItems";
+import { hasRootFolderBoundary } from "@/lib/api/visibilityConfig";
 import { synoCallJson } from "@/lib/synology/client";
 import { SynologyApiError } from "@/lib/synology/types";
 
@@ -24,11 +27,38 @@ const folderItemCache = new Map<
 export async function fetchVisibleItemInfo(
   options: FetchVisibleItemInfoOptions,
 ): Promise<SynoItem> {
-  const { notFoundMessage = "Item not found" } = options;
+  const { notFoundMessage = "Item not found", passphrase } = options;
   const additional = ensureTagIncluded(options.additional);
 
   const item = await fetchItemInfo({ ...options, additional });
   if (!item) throw notFound(notFoundMessage);
+
+  if (hasRootFolderBoundary()) {
+    const itemFolderId = extractItemFolderId(item);
+    if (itemFolderId == null) {
+      throw notFound(notFoundMessage);
+    }
+    const params = passphrase ? { passphrase } : undefined;
+    const withinBoundary = await isFolderWithinBoundary(itemFolderId, params);
+    if (!withinBoundary) {
+      throw notFound(notFoundMessage);
+    }
+  }
+
+  const itemId = (item.id ?? item.unit_id ?? item.item_id ?? item.photo_id) as
+    | string
+    | number
+    | undefined
+    | null;
+
+  // Treat unknown identifiers as not found to avoid bypassing the reported-items filter.
+  if (itemId == null) {
+    throw notFound(notFoundMessage);
+  }
+
+  if (await isItemReported(String(itemId))) {
+    throw notFound(notFoundMessage);
+  }
 
   assertVisibleItem(item, notFoundMessage);
   return item;
@@ -40,7 +70,6 @@ async function fetchItemInfo(
   const { itemId, passphrase, additional, folderId } = options;
   const idString = String(parseNumericId(itemId));
 
-  // Try folder scan if folderId provided (most common path)
   if (folderId) {
     const item = await findItemInFolder({
       itemId: idString,
@@ -51,7 +80,6 @@ async function fetchItemInfo(
     if (item) return item;
   }
 
-  // Fall back to direct getinfo
   const params: Record<string, unknown> = {
     id: parseNumericId(itemId),
     additional,
@@ -111,13 +139,11 @@ async function findItemInFolder(options: {
   const cacheKey = buildCacheKey(folderId, passphrase, additional);
   const now = Date.now();
 
-  // Check cache
   const cached = folderItemCache.get(cacheKey);
   if (cached && cached.expiresAt > now) {
     return cached.items.get(itemId) ?? null;
   }
 
-  // Load folder items
   try {
     const items = await loadFolderItems({ folderId, passphrase, additional });
     folderItemCache.set(cacheKey, {
@@ -178,4 +204,10 @@ async function loadFolderItems(options: {
   }
 
   return items;
+}
+
+function extractItemFolderId(item: SynoItem): string | null {
+  const folderId = item.folder_id ?? item.folderId ?? item.parent_folder_id;
+  if (folderId === null || folderId === undefined || folderId === "") return null;
+  return String(folderId);
 }
