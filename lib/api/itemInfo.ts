@@ -36,12 +36,15 @@ export async function fetchVisibleItemInfo(
   // Verify the item's folder is within the allowed boundary
   if (hasRootFolderBoundary()) {
     const itemFolderId = extractItemFolderId(item);
-    if (itemFolderId) {
-      const params = passphrase ? { passphrase } : undefined;
-      const withinBoundary = await isFolderWithinBoundary(itemFolderId, params);
-      if (!withinBoundary) {
-        throw notFound(notFoundMessage);
-      }
+    // When a root folder boundary is configured, items without a folder ID
+    // must not bypass the boundary check.
+    if (itemFolderId == null) {
+      throw notFound(notFoundMessage);
+    }
+    const params = passphrase ? { passphrase } : undefined;
+    const withinBoundary = await isFolderWithinBoundary(itemFolderId, params);
+    if (!withinBoundary) {
+      throw notFound(notFoundMessage);
     }
   }
 
