@@ -28,7 +28,7 @@ export function ReportModal({ item, onClose, onReportSuccess }: ReportModalProps
 
       if (response.ok) {
         setState("success");
-        setTimeout(() => onReportSuccess(item.id), 1500);
+        onReportSuccess(item.id);
       } else {
         setState("idle");
       }
