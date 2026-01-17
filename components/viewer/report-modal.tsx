@@ -111,16 +111,24 @@ export function ReportModal({
         )}
 
         {state === "success" && (
-          <div className="flex flex-col items-center gap-6 py-8">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500/20">
-              <HugeiconsIcon
-                icon={CheckmarkCircle02Icon}
-                className="h-8 w-8 text-green-500"
-                strokeWidth={2}
-              />
+          <>
+            {(() => {
+              if (typeof window !== "undefined") {
+                window.setTimeout(onClose, 1500);
+              }
+              return null;
+            })()}
+            <div className="flex flex-col items-center gap-6 py-8">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500/20">
+                <HugeiconsIcon
+                  icon={CheckmarkCircle02Icon}
+                  className="h-8 w-8 text-green-500"
+                  strokeWidth={2}
+                />
+              </div>
+              <p className="text-sm text-white/70">Foto wurde gemeldet</p>
             </div>
-            <p className="text-sm text-white/70">Foto wurde gemeldet</p>
-          </div>
+          </>
         )}
 
         {state === "error" && (
