@@ -1,8 +1,8 @@
 /**
  * Visibility mode configuration for photo filtering.
  *
- * - "hide" mode (default): All photos are visible by default.
- *   Photos with the "hide" tag are filtered out.
+ * - "hide" mode (default mode): All photos start as visible before tag-based filtering is applied.
+ *   Photos with the "hide" tag are then filtered out (hidden).
  *
  * - "show" mode: No photos are visible by default.
  *   Only photos with the "show" tag are displayed.
