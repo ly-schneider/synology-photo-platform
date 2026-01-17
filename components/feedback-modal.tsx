@@ -86,7 +86,7 @@ export function FeedbackModal({ onClose }: FeedbackModalProps) {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Dein Feedback..."
-                maxLength={MAX_MESSAGE_LENGTH + 100}
+                maxLength={MAX_MESSAGE_LENGTH}
                 className={`min-h-[120px] w-full resize-none rounded-2xl bg-white/10 p-4 text-white placeholder:text-white/40 focus:outline-none focus:ring-2 ${
                   isOverLimit
                     ? "ring-2 ring-red-500 focus:ring-red-500"
