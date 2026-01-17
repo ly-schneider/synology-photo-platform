@@ -7,7 +7,7 @@ import {
   CheckmarkCircle02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type ReportModalProps = {
   item: Item;
@@ -54,6 +54,12 @@ export function ReportModal({
     }
   };
 
+  useEffect(() => {
+    if (state !== "success") return;
+    const timeoutId = window.setTimeout(onClose, 1500);
+    return () => window.clearTimeout(timeoutId);
+  }, [state, onClose]);
+
   return (
     <div
       className="absolute inset-0 z-20 flex items-end justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
@@ -65,7 +71,6 @@ export function ReportModal({
       >
         {state === "idle" && (
           <div className="flex flex-col items-center gap-6">
-            {/* Warning icon visual indicator */}
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500/20">
               <HugeiconsIcon
                 icon={Alert02Icon}
@@ -74,7 +79,6 @@ export function ReportModal({
               />
             </div>
 
-            {/* Instruction text */}
             <div className="text-center">
               <p className="text-lg font-medium text-white">Foto melden</p>
               <p className="mt-2 text-sm text-white/70">
@@ -82,7 +86,6 @@ export function ReportModal({
               </p>
             </div>
 
-            {/* Report button - destructive red style */}
             <button
               onClick={handleReport}
               className="w-full rounded-2xl bg-red-600 py-4 font-medium text-white transition-transform active:scale-[0.98]"
@@ -90,7 +93,6 @@ export function ReportModal({
               Melden
             </button>
 
-            {/* Cancel button */}
             <button
               onClick={onClose}
               className="text-sm text-white/50 transition-colors active:text-white/70"
@@ -111,24 +113,16 @@ export function ReportModal({
         )}
 
         {state === "success" && (
-          <>
-            {(() => {
-              if (typeof window !== "undefined") {
-                window.setTimeout(onClose, 1500);
-              }
-              return null;
-            })()}
-            <div className="flex flex-col items-center gap-6 py-8">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500/20">
-                <HugeiconsIcon
-                  icon={CheckmarkCircle02Icon}
-                  className="h-8 w-8 text-green-500"
-                  strokeWidth={2}
-                />
-              </div>
-              <p className="text-sm text-white/70">Foto wurde gemeldet</p>
+          <div className="flex flex-col items-center gap-6 py-8">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500/20">
+              <HugeiconsIcon
+                icon={CheckmarkCircle02Icon}
+                className="h-8 w-8 text-green-500"
+                strokeWidth={2}
+              />
             </div>
-          </>
+            <p className="text-sm text-white/70">Foto wurde gemeldet</p>
+          </div>
         )}
 
         {state === "error" && (

@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { NextRequest } from "next/server";
 
 import { redis } from "@/lib/redis";
@@ -15,8 +16,23 @@ type RateLimitResult = {
 
 export function getClientId(request: NextRequest): string {
   const forwarded = request.headers.get("x-forwarded-for");
-  const ip = forwarded ? forwarded.split(",")[0].trim() : "unknown";
-  return ip;
+  if (forwarded?.trim()) {
+    return forwarded.split(",")[0].trim();
+  }
+
+  const realIp =
+    request.headers.get("x-real-ip") ?? request.headers.get("cf-connecting-ip");
+  if (realIp?.trim()) return realIp.trim();
+
+  const requestIp = (request as unknown as { ip?: string }).ip;
+  if (requestIp?.trim()) return requestIp.trim();
+
+  const userAgent = request.headers.get("user-agent");
+  if (userAgent) {
+    return `ua-${createHash("sha256").update(userAgent).digest("hex")}`;
+  }
+
+  throw new Error("Unable to determine client identifier for rate limiting");
 }
 
 function validatePipelineResults(
@@ -27,7 +43,6 @@ function validatePipelineResults(
   }
 
   for (const item of results) {
-    // Upstash pipeline results are typically [error, result] tuples.
     if (Array.isArray(item)) {
       const [err] = item as [unknown, unknown];
       if (err) {
@@ -39,7 +54,6 @@ function validatePipelineResults(
       continue;
     }
 
-    // Be defensive in case an Error is returned directly.
     if (item instanceof Error) {
       throw item;
     }
@@ -86,7 +100,7 @@ export async function checkRateLimit(
   const addPipeline = redis.pipeline();
   addPipeline.zadd(rateLimitKey, {
     score: now,
-    member: `${now}:${Math.random()}`,
+    member: `${now}:${crypto.randomUUID()}`,
   });
   addPipeline.expire(rateLimitKey, config.windowSeconds);
 
