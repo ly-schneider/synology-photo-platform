@@ -51,11 +51,22 @@ export async function fetchVisibleItemInfo(
   assertVisibleItem(item, notFoundMessage);
 
   // Check if item has been reported
-  const itemId = item.id ?? item.unit_id ?? item.item_id ?? item.photo_id;
-  if (itemId && (await isItemReported(String(itemId)))) {
+  const itemId =
+    (item.id ?? item.unit_id ?? item.item_id ?? item.photo_id) as
+      | string
+      | number
+      | undefined
+      | null;
+
+  // If we cannot determine a stable identifier for the item, treat it as not found
+  // to avoid bypassing the reported-items filter.
+  if (itemId == null) {
     throw notFound(notFoundMessage);
   }
 
+  if (await isItemReported(String(itemId))) {
+    throw notFound(notFoundMessage);
+  }
   return item;
 }
 
