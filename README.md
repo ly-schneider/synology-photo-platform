@@ -22,6 +22,7 @@ Since Synology Photos provides a comprehensive API, this project bridges the gap
 - **Touch Gestures** - Swipe horizontally to navigate between photos, swipe down to close
 - **Keyboard Navigation** - Use arrow keys to navigate, Escape to close (desktop)
 - **Download & Share** - Native share sheet integration for easy saving and sharing
+- **Photo Reporting** - Users can flag inappropriate photos for moderation
 - **Progressive Web App** - Install on mobile devices for an app-like experience
 - **Serverless Ready** - Per-request authentication works seamlessly on Vercel and other serverless platforms
 
@@ -38,6 +39,7 @@ This application acts as a lightweight frontend proxy to the Synology Photos API
 
 - **Framework**: [Next.js 16](https://nextjs.org/) with React 19
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/) with [Radix UI](https://radix-ui.com/) components
+- **Database**: [Upstash Redis](https://upstash.com/) for photo reports
 - **Deployment**: Optimized for [Vercel](https://vercel.com/)
 - **Package Manager**: pnpm
 
@@ -75,10 +77,18 @@ This application acts as a lightweight frontend proxy to the Synology Photos API
    Required environment variables:
 
    ```env
-   # Synology Photos configuration
+   # Synology Photos configuration (required)
    SYNOLOGY_PHOTO_BASE_URL=https://your-nas.example.com:5001
    SYNOLOGY_USERNAME=your_synology_username
    SYNOLOGY_PASSWORD=your_synology_password
+
+   # Upstash Redis (required for photo reporting)
+   UPSTASH_REDIS_REST_URL=https://your-redis.upstash.io
+   UPSTASH_REDIS_REST_TOKEN=your_redis_token
+
+   # Content visibility (optional)
+   SYNOLOGY_ROOT_FOLDER_ID=123          # Restrict to specific folder subtree
+   PHOTO_VISIBILITY_MODE=hide           # "hide" or "show" (default: hide)
 
    # App customization (optional)
    NEXT_PUBLIC_TITLE=Photo Gallery
@@ -127,12 +137,36 @@ Create a dedicated Synology user account with the following permissions:
 
 ### Content Visibility Controls
 
-You can control what content appears in the platform:
+You can control what content appears in the platform through several mechanisms:
+
+#### Folder Visibility
 
 - **Hide Folders**: Add the suffix `(hide)` to any folder name to exclude it from the interface (e.g., `Private Photos (hide)`)
-- **Hide Images**: Tag individual images with the `hide` tag in Synology Photos to exclude them from the gallery
+- **Root Folder Boundary**: Set `SYNOLOGY_ROOT_FOLDER_ID` to restrict navigation to a specific folder and its subfolders. Users cannot navigate outside this boundary.
 
-These filters are enforced server-side, ensuring hidden content remains secure and inaccessible through the platform.
+#### Photo Visibility Modes
+
+Control which photos are visible using the `PHOTO_VISIBILITY_MODE` environment variable:
+
+| Mode | Behavior |
+|------|----------|
+| `hide` (default) | All photos are visible. Tag photos with `hide` in Synology Photos to exclude them. |
+| `show` | No photos are visible by default. Only photos tagged with `show` in Synology Photos are displayed. |
+
+This is useful for curating galleries - use `show` mode when you want to hand-pick which photos appear, or `hide` mode when you want everything visible except specific exclusions.
+
+#### Photo Reporting
+
+Users can report inappropriate photos directly from the viewer. Reported photos are:
+- Stored in Upstash Redis for moderation review
+- Instantly hidden from the gallery (no page refresh required)
+- Blocked from direct access (thumbnails, downloads, info endpoints return 404)
+
+**Redis Data Structure:**
+- `photo:reports:{itemId}` - List of reports with timestamps and user agents
+- `photo:reported_items` - Set of all reported item IDs for quick filtering
+
+All visibility filters are enforced server-side, ensuring hidden content remains secure and inaccessible through the platform.
 
 ## Development
 
@@ -152,15 +186,17 @@ pnpm prettier     # Format code with Prettier
 ```
 synology-photo-platform/
 ├── app/                    # Next.js app directory
-│   ├── api/                # API routes (Synology proxy)
+│   ├── api/                # API routes
 │   │   ├── collections/    # Folder/collection endpoints
-│   │   └── items/          # Photo item endpoints
+│   │   ├── items/          # Photo item endpoints
+│   │   └── reports/        # Photo reporting endpoint
 │   ├── page.tsx            # Main gallery page
 │   └── layout.tsx          # App layout
 ├── components/             # Reusable UI components
 ├── lib/                    # Core library code
 │   ├── api/                # API utilities and filters
-│   └── synology/           # Synology API client and auth
+│   ├── synology/           # Synology API client and auth
+│   └── redis.ts            # Upstash Redis client
 └── public/                 # Static assets
 ```
 
@@ -186,6 +222,8 @@ Perfect for:
 - The Synology credentials are stored as environment variables and never exposed to the client
 - All API requests are proxied through Next.js API routes
 - Per-request authentication ensures no session data is persisted between requests
+- Reported photos are immediately hidden and blocked from all access points
+- Visibility filters (tags, folders, root boundary) are enforced server-side
 - Use HTTPS in production (automatic with Vercel)
 - Consider restricting access to specific photo folders in your Synology user permissions
 

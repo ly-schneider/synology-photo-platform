@@ -2,6 +2,7 @@ import { notFound } from "@/lib/api/errors";
 import { assertVisibleItem } from "@/lib/api/filtering";
 import { isFolderWithinBoundary } from "@/lib/api/folderBoundary";
 import { parseNumericId, readRecord } from "@/lib/api/mappers";
+import { isItemReported } from "@/lib/api/reportedItems";
 import { hasRootFolderBoundary } from "@/lib/api/visibilityConfig";
 import { synoCallJson } from "@/lib/synology/client";
 import { SynologyApiError } from "@/lib/synology/types";
@@ -45,6 +46,13 @@ export async function fetchVisibleItemInfo(
   }
 
   assertVisibleItem(item, notFoundMessage);
+
+  // Check if item has been reported
+  const itemId = item.id ?? item.unit_id ?? item.item_id ?? item.photo_id;
+  if (itemId && (await isItemReported(String(itemId)))) {
+    throw notFound(notFoundMessage);
+  }
+
   return item;
 }
 

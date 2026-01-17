@@ -45,5 +45,9 @@ export function useCollectionItems(collectionId: string | null) {
   const isReady = collectionId !== null && loadedCollectionId === collectionId;
   const isLoading = collectionId !== null && !isReady;
 
-  return { folders, items, isLoading, isReady };
+  const removeItem = (itemId: string) => {
+    setItems((prev) => prev.filter((item) => item.id !== itemId));
+  };
+
+  return { folders, items, isLoading, isReady, removeItem };
 }

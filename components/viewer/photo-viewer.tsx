@@ -4,6 +4,7 @@ import { useSwipeGesture } from "@/hooks/use-swipe-gesture";
 import type { Item } from "@/types/api";
 import Image from "next/image";
 import { useState } from "react";
+import { ReportModal } from "./report-modal";
 import { ShareModal } from "./share-modal";
 import { ViewerHeader } from "./viewer-header";
 import { ViewerNavigation } from "./viewer-navigation";
@@ -17,6 +18,7 @@ type PhotoViewerProps = {
   onPrevious: () => void;
   onNext: () => void;
   onImageLoad: () => void;
+  onReportSuccess: (itemId: string) => void;
 };
 
 export function PhotoViewer({
@@ -28,8 +30,10 @@ export function PhotoViewer({
   onPrevious,
   onNext,
   onImageLoad,
+  onReportSuccess,
 }: PhotoViewerProps) {
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   const { touchDelta, swipeDirection, isAnimating, handlers } = useSwipeGesture(
     {
@@ -55,7 +59,11 @@ export function PhotoViewer({
 
   return (
     <div className="fixed inset-0 z-50 bg-black">
-      <ViewerHeader onClose={onClose} onShare={() => setShowShareModal(true)} />
+      <ViewerHeader
+        onClose={onClose}
+        onReport={() => setShowReportModal(true)}
+        onShare={() => setShowShareModal(true)}
+      />
 
       <div
         className="relative flex h-full w-full items-center justify-center p-4 select-none"
@@ -99,6 +107,14 @@ export function PhotoViewer({
 
       {showShareModal && (
         <ShareModal item={item} onClose={() => setShowShareModal(false)} />
+      )}
+
+      {showReportModal && (
+        <ReportModal
+          item={item}
+          onClose={() => setShowReportModal(false)}
+          onReportSuccess={onReportSuccess}
+        />
       )}
     </div>
   );
