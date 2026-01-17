@@ -51,7 +51,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (isDuplicate) {
       return NextResponse.json(
         { success: true, reportId: "duplicate" },
-        { status: 201 },
+        { status: 200 },
       );
     }
 
