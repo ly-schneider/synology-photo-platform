@@ -148,10 +148,10 @@ You can control what content appears in the platform through several mechanisms:
 
 Control which photos are visible using the `PHOTO_VISIBILITY_MODE` environment variable:
 
-| Mode             | Behavior                                                                                           |
-| ---------------- | -------------------------------------------------------------------------------------------------- |
-| `hide` (default) | All photos are visible. Tag photos with `hide` in Synology Photos to exclude them.                 |
-| `show`           | No photos are visible by default. Only photos tagged with `show` in Synology Photos are displayed. |
+| Mode | Behavior |
+| ---- | -------- |
+| `hide` (default) | All photos are visible. Tag photos with `hide` in Synology Photos to exclude them. |
+| `show` | No photos are visible by default. Only photos tagged with `show` in Synology Photos are displayed. |
 
 This is useful for curating galleries - use `show` mode when you want to hand-pick which photos appear, or `hide` mode when you want everything visible except specific exclusions.
 
