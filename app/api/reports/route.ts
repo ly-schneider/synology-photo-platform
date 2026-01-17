@@ -63,7 +63,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const sanitizedFilename =
       typeof filename === "string"
-        ? filename.replace(/[<>]/g, "").trim() || null
+        ? filename
+            // Remove control characters (including null bytes) and angle brackets
+            .replace(/[\x00-\x1F\x7F<>]/g, "")
+            // Normalize whitespace and trim
+            .replace(/\s+/g, " ")
+            .trim() || null
         : null;
 
     const reportId = crypto.randomUUID();
