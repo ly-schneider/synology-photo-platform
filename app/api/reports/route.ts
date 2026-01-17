@@ -12,11 +12,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       throw new ApiError(400, "BAD_REQUEST", "itemId is required");
     }
 
+    const sanitizedFilename =
+      typeof filename === "string"
+        ? filename.replace(/[<>]/g, "").trim() || null
+        : null;
+
     const reportId = crypto.randomUUID();
     const report = {
       reportedAt: new Date().toISOString(),
       userAgent: request.headers.get("user-agent") || "unknown",
-      filename: filename || null,
+      filename: sanitizedFilename,
     };
 
     await Promise.all([
