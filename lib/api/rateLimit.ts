@@ -57,8 +57,28 @@ export async function checkRateLimit(
 
   const results = await pipeline.exec();
 
-  // zcard result is at index 1
-  const currentCount = (results[1] as number) || 0;
+  if (!results) {
+    throw new Error("Redis pipeline execution returned no results");
+  }
+
+  // Some Redis clients (e.g., ioredis) return [error, result] tuples for each command.
+  // Check for any command-level errors before proceeding.
+  for (const item of results as unknown[]) {
+    if (Array.isArray(item) && item.length > 0 && item[0]) {
+      const err = item[0];
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error(String(err));
+    }
+  }
+
+  // zcard result is at index 1; support both tuple and plain-result formats
+  const zcardResultEntry = results[1] as unknown;
+  const currentCount =
+    (Array.isArray(zcardResultEntry)
+      ? (zcardResultEntry[1] as number)
+      : (zcardResultEntry as number)) || 0;
   const resetAt = now + config.windowSeconds;
 
   if (currentCount >= config.limit) {
