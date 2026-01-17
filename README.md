@@ -39,7 +39,7 @@ This application acts as a lightweight frontend proxy to the Synology Photos API
 
 - **Framework**: [Next.js 16](https://nextjs.org/) with React 19
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/) with [Radix UI](https://radix-ui.com/) components
-- **Database**: [Upstash Redis](https://upstash.com/) for photo reports
+- **Database**: [Upstash Redis](https://upstash.com/) for photo reports, user feedback, and rate limiting
 - **Deployment**: Optimized for [Vercel](https://vercel.com/)
 - **Package Manager**: pnpm
 
@@ -82,7 +82,7 @@ This application acts as a lightweight frontend proxy to the Synology Photos API
    SYNOLOGY_USERNAME=your_synology_username
    SYNOLOGY_PASSWORD=your_synology_password
 
-   # Upstash Redis (required for photo reporting)
+   # Upstash Redis (required for photo reporting, feedback, and rate limiting)
    UPSTASH_REDIS_REST_URL=https://your-redis.upstash.io
    UPSTASH_REDIS_REST_TOKEN=your_redis_token
 
@@ -148,23 +148,38 @@ You can control what content appears in the platform through several mechanisms:
 
 Control which photos are visible using the `PHOTO_VISIBILITY_MODE` environment variable:
 
-| Mode | Behavior |
-|------|----------|
-| `hide` (default) | All photos are visible. Tag photos with `hide` in Synology Photos to exclude them. |
-| `show` | No photos are visible by default. Only photos tagged with `show` in Synology Photos are displayed. |
+| Mode             | Behavior                                                                                           |
+| ---------------- | -------------------------------------------------------------------------------------------------- |
+| `hide` (default) | All photos are visible. Tag photos with `hide` in Synology Photos to exclude them.                 |
+| `show`           | No photos are visible by default. Only photos tagged with `show` in Synology Photos are displayed. |
 
 This is useful for curating galleries - use `show` mode when you want to hand-pick which photos appear, or `hide` mode when you want everything visible except specific exclusions.
 
 #### Photo Reporting
 
 Users can report inappropriate photos directly from the viewer. Reported photos are:
+
 - Stored in Upstash Redis for moderation review
 - Instantly hidden from the gallery (no page refresh required)
 - Blocked from direct access (thumbnails, downloads, info endpoints return 404)
+- Rate limited to prevent abuse (10 reports per minute per IP)
+- Duplicate reports from the same IP for the same photo are prevented within 1 hour
+
+#### User Feedback
+
+Users can submit feedback through the footer. Feedback submissions are:
+
+- Stored in Upstash Redis for review
+- Rate limited to prevent spam (5 submissions per minute per IP)
+- Limited to 5000 characters per message
 
 **Redis Data Structure:**
-- `photo:reports:{itemId}` - List of reports with timestamps and user agents
+
+- `photo:reports:{itemId}` - List of reports with reportId, timestamps, and user agents
 - `photo:reported_items` - Set of all reported item IDs for quick filtering
+- `photo:feedback` - List of feedback messages with timestamps and user agents
+- `photo:report_duplicate:{itemId}:{ip}` - Temporary keys to prevent duplicate reports
+- `ratelimit:{endpoint}:{ip}` - Sorted sets for rate limiting
 
 All visibility filters are enforced server-side, ensuring hidden content remains secure and inaccessible through the platform.
 
@@ -189,12 +204,13 @@ synology-photo-platform/
 │   ├── api/                # API routes
 │   │   ├── collections/    # Folder/collection endpoints
 │   │   ├── items/          # Photo item endpoints
-│   │   └── reports/        # Photo reporting endpoint
+│   │   ├── reports/        # Photo reporting endpoint
+│   │   └── feedback/       # User feedback endpoint
 │   ├── page.tsx            # Main gallery page
 │   └── layout.tsx          # App layout
 ├── components/             # Reusable UI components
 ├── lib/                    # Core library code
-│   ├── api/                # API utilities and filters
+│   ├── api/                # API utilities, filters, and rate limiting
 │   ├── synology/           # Synology API client and auth
 │   └── redis.ts            # Upstash Redis client
 └── public/                 # Static assets

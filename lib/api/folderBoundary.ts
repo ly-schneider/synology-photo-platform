@@ -8,7 +8,10 @@
 
 import { notFound } from "@/lib/api/errors";
 import { parseNumericId, readRecord } from "@/lib/api/mappers";
-import { getRootFolderId, hasRootFolderBoundary } from "@/lib/api/visibilityConfig";
+import {
+  getRootFolderId,
+  hasRootFolderBoundary,
+} from "@/lib/api/visibilityConfig";
 import { synoCallJson } from "@/lib/synology/client";
 import { SynologyApiError } from "@/lib/synology/types";
 

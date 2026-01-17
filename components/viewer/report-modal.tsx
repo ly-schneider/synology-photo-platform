@@ -1,7 +1,11 @@
 "use client";
 
 import type { Item } from "@/types/api";
-import { Alert02Icon, CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
+import {
+  Alert02Icon,
+  AlertCircleIcon,
+  CheckmarkCircle02Icon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useState } from "react";
 
@@ -11,13 +15,19 @@ type ReportModalProps = {
   onReportSuccess: (itemId: string) => void;
 };
 
-type ModalState = "idle" | "loading" | "success";
+type ModalState = "idle" | "loading" | "success" | "error";
 
-export function ReportModal({ item, onClose, onReportSuccess }: ReportModalProps) {
+export function ReportModal({
+  item,
+  onClose,
+  onReportSuccess,
+}: ReportModalProps) {
   const [state, setState] = useState<ModalState>("idle");
+  const [errorMessage, setErrorMessage] = useState<string>("");
 
   const handleReport = async () => {
     setState("loading");
+    setErrorMessage("");
 
     try {
       const response = await fetch("/api/reports", {
@@ -30,10 +40,17 @@ export function ReportModal({ item, onClose, onReportSuccess }: ReportModalProps
         setState("success");
         onReportSuccess(item.id);
       } else {
-        setState("idle");
+        const data = await response.json().catch(() => ({}));
+        if (response.status === 429) {
+          setErrorMessage("Zu viele Anfragen. Bitte warte einen Moment.");
+        } else {
+          setErrorMessage(data.message || "Ein Fehler ist aufgetreten.");
+        }
+        setState("error");
       }
     } catch {
-      setState("idle");
+      setErrorMessage("Verbindungsfehler. Bitte versuche es erneut.");
+      setState("error");
     }
   };
 
@@ -103,6 +120,37 @@ export function ReportModal({ item, onClose, onReportSuccess }: ReportModalProps
               />
             </div>
             <p className="text-sm text-white/70">Foto wurde gemeldet</p>
+          </div>
+        )}
+
+        {state === "error" && (
+          <div className="flex flex-col items-center gap-6">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-orange-500/20">
+              <HugeiconsIcon
+                icon={AlertCircleIcon}
+                className="h-8 w-8 text-orange-500"
+                strokeWidth={2}
+              />
+            </div>
+
+            <div className="text-center">
+              <p className="text-lg font-medium text-white">Fehler</p>
+              <p className="mt-2 text-sm text-white/70">{errorMessage}</p>
+            </div>
+
+            <button
+              onClick={handleReport}
+              className="w-full rounded-2xl bg-white py-4 font-medium text-black transition-transform active:scale-[0.98]"
+            >
+              Erneut versuchen
+            </button>
+
+            <button
+              onClick={onClose}
+              className="text-sm text-white/50 transition-colors active:text-white/70"
+            >
+              Abbrechen
+            </button>
           </div>
         )}
       </div>
