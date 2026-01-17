@@ -8,4 +8,5 @@ export type Feedback = {
 
 export async function storeFeedback(feedback: Feedback): Promise<void> {
   await redis.lpush("photo:feedback", JSON.stringify(feedback));
+  await redis.ltrim("photo:feedback", 0, 999);
 }
