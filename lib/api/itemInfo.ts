@@ -208,6 +208,6 @@ async function loadFolderItems(options: {
 
 function extractItemFolderId(item: SynoItem): string | null {
   const folderId = item.folder_id ?? item.folderId ?? item.parent_folder_id;
-  if (folderId === null || folderId === undefined) return null;
+  if (folderId === null || folderId === undefined || folderId === "") return null;
   return String(folderId);
 }
