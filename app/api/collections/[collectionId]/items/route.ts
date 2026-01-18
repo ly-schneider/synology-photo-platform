@@ -135,11 +135,17 @@ export async function GET(
         ? itemTotal
         : offset + sortedItems.length;
 
+    const currentFolderName =
+      folderInfo && typeof folderInfo === "object" && "name" in folderInfo
+        ? String(folderInfo.name)
+        : undefined;
+
     return NextResponse.json({
       folders: sortedFolders,
       items: sortedItems,
       foldersPage: { offset, limit, total: resolvedFolderTotal },
       page: { offset, limit, total: resolvedItemTotal },
+      currentFolderName,
     });
   } catch (err) {
     return handleApiError(err);

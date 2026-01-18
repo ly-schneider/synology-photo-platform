@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { ApiError, handleApiError } from "@/lib/api/errors";
+import {
+  StoredReport,
+  addReport,
+  hasRecentDuplicate,
+} from "@/lib/api/reportedItems";
 import { checkRateLimit, getClientId } from "@/lib/api/rateLimit";
-import { redis } from "@/lib/redis";
 
 const RATE_LIMIT_CONFIG = {
   limit: 10,
@@ -12,8 +16,6 @@ const RATE_LIMIT_CONFIG = {
 const ITEM_ID_MAX_LENGTH = 128;
 const ITEM_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 const FILENAME_MAX_LENGTH = 255;
-const REPORT_LIST_MAX_LENGTH = 200;
-const REPORT_LIST_TTL_SECONDS = 60 * 60 * 24 * 30;
 const DUPLICATE_WINDOW_SECONDS = 3600;
 
 function validateItemId(raw: unknown): string {
@@ -89,9 +91,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const itemId = validateItemId(body.itemId);
 
     const clientIp = getClientId(request);
-    const duplicateKey = `photo:report_duplicate:${itemId}:${clientIp}`;
 
-    const isDuplicate = await redis.exists(duplicateKey);
+    const isDuplicate = await hasRecentDuplicate(
+      itemId,
+      clientIp,
+      DUPLICATE_WINDOW_SECONDS,
+    );
     if (isDuplicate) {
       return NextResponse.json(
         { success: true, reportId: "duplicate" },
@@ -109,16 +114,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       filename: sanitizedFilename,
     };
 
-    const listKey = `photo:reports:${itemId}`;
-    const pipeline = redis.pipeline();
+    const now = new Date();
+    const stored: StoredReport = {
+      itemId,
+      clientId: clientIp,
+      report,
+      createdAt: now,
+    };
 
-    pipeline.lpush(listKey, JSON.stringify(report));
-    pipeline.ltrim(listKey, 0, REPORT_LIST_MAX_LENGTH - 1);
-    pipeline.expire(listKey, REPORT_LIST_TTL_SECONDS);
-    pipeline.sadd("photo:reported_items", itemId);
-    pipeline.setex(duplicateKey, DUPLICATE_WINDOW_SECONDS, "1");
-
-    await pipeline.exec();
+    await addReport(stored);
 
     return NextResponse.json({ success: true, reportId }, { status: 201 });
   } catch (err) {

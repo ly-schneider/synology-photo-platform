@@ -3,11 +3,52 @@
 import { useSwipeGesture } from "@/hooks/use-swipe-gesture";
 import type { Item } from "@/types/api";
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ReportModal } from "./report-modal";
 import { ShareModal } from "./share-modal";
 import { ViewerHeader } from "./viewer-header";
 import { ViewerNavigation } from "./viewer-navigation";
+
+const TRACKED_ITEMS_KEY = "analytics_tracked_items";
+
+function getTrackedItems(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const stored = sessionStorage.getItem(TRACKED_ITEMS_KEY);
+    return stored ? new Set(JSON.parse(stored)) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function markItemTracked(itemId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    const tracked = getTrackedItems();
+    tracked.add(itemId);
+    sessionStorage.setItem(TRACKED_ITEMS_KEY, JSON.stringify([...tracked]));
+  } catch {
+    // Ignore sessionStorage errors
+  }
+}
+
+function isItemTracked(itemId: string): boolean {
+  return getTrackedItems().has(itemId);
+}
+
+function trackItemView(itemId: string, itemFilename: string) {
+  if (isItemTracked(itemId)) return;
+  markItemTracked(itemId);
+  fetch("/api/analytics/track", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      type: "item_view",
+      itemId,
+      itemFilename,
+    }),
+  }).catch(() => {});
+}
 
 type PhotoViewerProps = {
   item: Item;
@@ -34,6 +75,12 @@ export function PhotoViewer({
 }: PhotoViewerProps) {
   const [showShareModal, setShowShareModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+
+  useEffect(() => {
+    if (item.id) {
+      trackItemView(item.id, item.filename);
+    }
+  }, [item.id, item.filename]);
 
   const { touchDelta, swipeDirection, isAnimating, handlers } = useSwipeGesture(
     {

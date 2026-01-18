@@ -1,3 +1,4 @@
+import { VisitorTracker } from "@/components/analytics/visitor-tracker";
 import Footer from "@/components/footer";
 import { A2HSNudge } from "@/components/pwa/a2hs-nudge";
 import ServiceWorker from "@/components/pwa/service-worker";
@@ -116,6 +117,7 @@ export default function RootLayout({
         <Footer />
         <ServiceWorker />
         <A2HSNudge />
+        <VisitorTracker />
       </body>
     </html>
   );

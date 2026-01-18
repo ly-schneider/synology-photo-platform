@@ -1,9 +1,21 @@
 "use client";
 
 import type { Collection, CollectionItemsResponse, Item } from "@/types/api";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const DEFAULT_LIMIT = 200;
+
+function trackFolderView(folderId: string, folderName?: string) {
+  fetch("/api/analytics/track", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      type: "folder_view",
+      folderId,
+      folderName: folderName ?? "Unknown",
+    }),
+  }).catch(() => {});
+}
 
 export function useCollectionItems(collectionId: string | null) {
   const [folders, setFolders] = useState<Collection[]>([]);
@@ -11,6 +23,7 @@ export function useCollectionItems(collectionId: string | null) {
   const [loadedCollectionId, setLoadedCollectionId] = useState<string | null>(
     null,
   );
+  const trackedCollectionRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!collectionId) return;
@@ -29,6 +42,11 @@ export function useCollectionItems(collectionId: string | null) {
         setFolders(data.folders ?? []);
         setItems(data.items ?? []);
         setLoadedCollectionId(collectionId);
+
+        if (trackedCollectionRef.current !== collectionId) {
+          trackedCollectionRef.current = collectionId;
+          trackFolderView(collectionId, data.currentFolderName);
+        }
       })
       .catch(() => {
         if (!active) return;

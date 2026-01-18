@@ -7,6 +7,8 @@ import {
 } from "@/lib/api/errors";
 import { fetchVisibleItemInfo } from "@/lib/api/itemInfo";
 import { parseNumericId } from "@/lib/api/mappers";
+import { getVisitorId } from "@/lib/api/visitorId";
+import { trackDownload } from "@/lib/mongodb/analytics";
 import { synoCallRaw } from "@/lib/synology/client";
 
 export async function GET(
@@ -62,6 +64,9 @@ export async function GET(
         ? {}
         : { "Accept-Ranges": "bytes" }),
     });
+
+    const visitorId = getVisitorId(request);
+    trackDownload(itemId, filename, visitorId).catch(() => {});
 
     return new NextResponse(upstream.body, {
       status: upstream.status,

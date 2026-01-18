@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 import { NextRequest } from "next/server";
 
-import { redis } from "@/lib/redis";
+import { getDb } from "@/lib/mongodb/client";
 
 type RateLimitConfig = {
   limit: number;
@@ -13,6 +13,19 @@ type RateLimitResult = {
   remaining: number;
   resetAt: number;
 };
+
+type RateLimitDoc = {
+  key: string;
+  clientId: string;
+  attempts: Date[];
+  updatedAt: Date;
+};
+
+const COLLECTION_NAME = "rate_limits";
+const RATE_LIMIT_CLEANUP_TTL_SECONDS = 7 * 24 * 60 * 60; // keep documents for a week without traffic
+
+let indexesEnsured = false;
+let indexesEnsuring: Promise<void> | null = null;
 
 export function getClientId(request: NextRequest): string {
   const forwarded = request.headers.get("x-forwarded-for");
@@ -35,35 +48,69 @@ export function getClientId(request: NextRequest): string {
   throw new Error("Unable to determine client identifier for rate limiting");
 }
 
-function validatePipelineResults(
-  results: unknown[] | null,
-): asserts results is unknown[] {
-  if (!results) {
-    throw new Error("Redis pipeline execution returned no results");
-  }
+async function ensureIndexes(): Promise<void> {
+  if (indexesEnsured) return;
+  if (indexesEnsuring) return indexesEnsuring;
 
-  for (const item of results) {
-    if (Array.isArray(item)) {
-      const [err] = item as [unknown, unknown];
-      if (err) {
-        if (err instanceof Error) {
-          throw err;
-        }
-        throw new Error(String(err));
-      }
-      continue;
-    }
+  indexesEnsuring = (async () => {
+    const db = await getDb();
+    const collection = db.collection<RateLimitDoc>(COLLECTION_NAME);
 
-    if (item instanceof Error) {
-      throw item;
-    }
-  }
+    await Promise.all([
+      collection.createIndex({ key: 1, clientId: 1 }, { unique: true }),
+      collection.createIndex(
+        { updatedAt: 1 },
+        { expireAfterSeconds: RATE_LIMIT_CLEANUP_TTL_SECONDS },
+      ),
+    ]);
+
+    indexesEnsured = true;
+    indexesEnsuring = null;
+  })();
+
+  return indexesEnsuring;
 }
 
-function parseNumberResult(entry: unknown): number {
-  const value = Array.isArray(entry) ? entry[1] : entry;
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? parsed : 0;
+async function recordAttempt(
+  key: string,
+  clientId: string,
+  config: RateLimitConfig,
+): Promise<{ attempts: Date[]; added: boolean; now: Date }> {
+  await ensureIndexes();
+  const db = await getDb();
+  const collection = db.collection<RateLimitDoc>(COLLECTION_NAME);
+
+  const now = new Date();
+  const windowStart = new Date(now.getTime() - config.windowSeconds * 1000);
+
+  const existing = await collection.findOne(
+    { key, clientId },
+    { projection: { attempts: 1 } },
+  );
+
+  const attemptsWithinWindow = (existing?.attempts ?? []).filter(
+    (ts): ts is Date => ts instanceof Date && ts >= windowStart,
+  );
+
+  const added = attemptsWithinWindow.length < config.limit;
+  const nextAttempts = added
+    ? [...attemptsWithinWindow, now]
+    : attemptsWithinWindow;
+
+  await collection.updateOne(
+    { key, clientId },
+    {
+      $set: {
+        key,
+        clientId,
+        attempts: nextAttempts,
+        updatedAt: now,
+      },
+    },
+    { upsert: true },
+  );
+
+  return { attempts: nextAttempts, added, now };
 }
 
 export async function checkRateLimit(
@@ -72,44 +119,18 @@ export async function checkRateLimit(
   config: RateLimitConfig,
 ): Promise<RateLimitResult> {
   const clientId = getClientId(request);
-  const rateLimitKey = `ratelimit:${key}:${clientId}`;
-  const now = Math.floor(Date.now() / 1000);
-  const windowStart = now - config.windowSeconds;
+  const { attempts, added, now } = await recordAttempt(
+    key,
+    clientId,
+    config,
+  );
 
-  const cleanupPipeline = redis.pipeline();
+  const resetAt = Math.floor(now.getTime() / 1000) + config.windowSeconds;
+  const remaining = Math.max(0, config.limit - attempts.length);
 
-  cleanupPipeline.zremrangebyscore(rateLimitKey, 0, windowStart);
-  cleanupPipeline.zcard(rateLimitKey);
-  cleanupPipeline.expire(rateLimitKey, config.windowSeconds);
-
-  const cleanupResults = await cleanupPipeline.exec();
-  validatePipelineResults(cleanupResults);
-
-  const zcardResultEntry = cleanupResults[1] as unknown;
-  const currentCount = parseNumberResult(zcardResultEntry);
-  const resetAt = now + config.windowSeconds;
-
-  if (currentCount >= config.limit) {
-    return {
-      success: false,
-      remaining: 0,
-      resetAt,
-    };
+  if (!added) {
+    return { success: false, remaining: 0, resetAt };
   }
 
-  const addPipeline = redis.pipeline();
-  addPipeline.zadd(rateLimitKey, {
-    score: now,
-    member: `${now}:${crypto.randomUUID()}`,
-  });
-  addPipeline.expire(rateLimitKey, config.windowSeconds);
-
-  const addResults = await addPipeline.exec();
-  validatePipelineResults(addResults);
-
-  return {
-    success: true,
-    remaining: config.limit - currentCount - 1,
-    resetAt,
-  };
+  return { success: true, remaining, resetAt };
 }

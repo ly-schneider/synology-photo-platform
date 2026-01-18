@@ -10,6 +10,7 @@ export type CollectionItemsResponse = {
   items: Item[];
   foldersPage: { offset: number; limit: number; total: number };
   page: { offset: number; limit: number; total: number };
+  currentFolderName?: string;
 };
 
 export type { Collection, Item };
