@@ -3,7 +3,7 @@
 import { useSwipeGesture } from "@/hooks/use-swipe-gesture";
 import type { Item } from "@/types/api";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ReportModal } from "./report-modal";
 import { ShareModal } from "./share-modal";
 import { ViewerHeader } from "./viewer-header";
@@ -92,7 +92,28 @@ export function PhotoViewer({
     },
   );
 
-  const imageUrl = item.downloadUrl ?? `/api/items/${item.id}/download`;
+  const imageUrl = useMemo(() => {
+    const baseUrl = item.downloadUrl ?? `/api/items/${item.id}/download`;
+
+    // Ensure we request the image inline so analytics don't treat views as downloads
+    if (typeof window !== "undefined") {
+      try {
+        const url = new URL(baseUrl, window.location.origin);
+        url.searchParams.set("disposition", "inline");
+        return url.toString();
+      } catch {
+        // fall through to string concatenation
+      }
+    }
+
+    const hasDisposition = /[?&]disposition=/.test(baseUrl);
+    if (hasDisposition) {
+      return baseUrl.replace(/disposition=[^&]*/g, "disposition=inline");
+    }
+
+    const separator = baseUrl.includes("?") ? "&" : "?";
+    return `${baseUrl}${separator}disposition=inline`;
+  }, [item.downloadUrl, item.id]);
 
   const containerOpacity =
     swipeDirection === "vertical" ? Math.max(0, 1 - touchDelta.y / 300) : 1;

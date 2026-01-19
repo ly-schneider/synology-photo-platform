@@ -65,8 +65,11 @@ export async function GET(
         : { "Accept-Ranges": "bytes" }),
     });
 
-    const visitorId = getVisitorId(request);
-    trackDownload(itemId, filename, visitorId).catch(() => {});
+    const shouldTrackDownload = disposition === "attachment";
+    if (shouldTrackDownload) {
+      const visitorId = getVisitorId(request);
+      trackDownload(itemId, filename, visitorId).catch(() => {});
+    }
 
     return new NextResponse(upstream.body, {
       status: upstream.status,
