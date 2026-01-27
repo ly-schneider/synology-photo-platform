@@ -28,6 +28,10 @@ Client Components → Next.js API Routes → Synology Photos API
 
 - `collections/` - List folders, get folder contents
 - `items/[itemId]/` - Photo info, thumbnails, downloads
+- `admin/` - Admin authentication and management endpoints
+- `analytics/` - Analytics tracking and stats
+- `reports/` - Photo reporting endpoint
+- `feedback/` - User feedback endpoint
 
 **Synology Client (`lib/synology/`)**: Handles all Synology API communication
 
@@ -61,16 +65,22 @@ Client Components → Next.js API Routes → Synology Photos API
 
 - `/` - Root collections listing
 - `/collection/[...path]` - Nested collection view (path segments are folder IDs)
+- `/admin` - Admin dashboard (requires authentication)
+- `/admin/login` - Admin login page
+- `/admin/feedback` - Feedback management
+- `/admin/reports` - Photo reports management
 
 ## Environment Variables
 
-Required for Synology connection:
+Required:
 
 - `SYNOLOGY_PHOTO_BASE_URL` - NAS URL (e.g., `https://nas.example.com:5001`)
 - `SYNOLOGY_USERNAME`, `SYNOLOGY_PASSWORD` - Dedicated Synology user credentials
+- `MONGODB_URI` - MongoDB connection string (for analytics, reports, feedback, rate limiting)
 
 Optional:
 
 - `SYNOLOGY_ROOT_FOLDER_ID` - Starting folder ID, restricts users to this folder and subfolders only
 - `PHOTO_VISIBILITY_MODE` - Photo visibility mode: "hide" (default) or "show"
 - `NEXT_PUBLIC_TITLE`, `NEXT_PUBLIC_SHORT_TITLE` - App branding
+- `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_JWT_SECRET` - Enable admin dashboard (all three required)

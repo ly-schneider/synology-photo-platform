@@ -35,12 +35,24 @@ type PhotoViewerProps = {
   hasNext: boolean;
   folderId?: string;
   folderPath?: string[];
+  prevItem?: Item;
+  nextItem?: Item;
   onClose: () => void;
   onPrevious: () => void;
   onNext: () => void;
   onImageLoad: () => void;
   onReportSuccess: (itemId: string) => void;
 };
+
+function getImageUrl(item: Item): string {
+  const baseUrl = item.downloadUrl ?? `/api/items/${item.id}/download`;
+  const hasDisposition = /[?&]disposition=/.test(baseUrl);
+  if (hasDisposition) {
+    return baseUrl.replace(/disposition=[^&]*/g, "disposition=inline");
+  }
+  const separator = baseUrl.includes("?") ? "&" : "?";
+  return `${baseUrl}${separator}disposition=inline`;
+}
 
 export function PhotoViewer({
   item,
@@ -49,6 +61,8 @@ export function PhotoViewer({
   hasNext,
   folderId,
   folderPath,
+  prevItem,
+  nextItem,
   onClose,
   onPrevious,
   onNext,
@@ -65,6 +79,20 @@ export function PhotoViewer({
       trackItemView(item.id, item.filename, folderId, folderPath);
     }
   }, [item.id, item.filename, folderId, folderPath]);
+
+  // Prefetch adjacent images for smoother navigation
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const prefetch = (adjacentItem: Item | undefined) => {
+      if (!adjacentItem) return;
+      const img = new window.Image();
+      img.src = getImageUrl(adjacentItem);
+    };
+
+    prefetch(prevItem);
+    prefetch(nextItem);
+  }, [prevItem, nextItem]);
 
   const { touchDelta, swipeDirection, isAnimating, handlers } = useSwipeGesture(
     {

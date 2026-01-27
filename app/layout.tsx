@@ -1,6 +1,6 @@
 import { VisitorTracker } from "@/components/analytics/visitor-tracker";
+import { DeferredComponents } from "@/components/deferred-components";
 import Footer from "@/components/footer";
-import { A2HSNudge } from "@/components/pwa/a2hs-nudge";
 import ServiceWorker from "@/components/pwa/service-worker";
 import { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
@@ -116,7 +116,7 @@ export default function RootLayout({
         {children}
         <Footer />
         <ServiceWorker />
-        <A2HSNudge />
+        <DeferredComponents />
         <VisitorTracker />
       </body>
     </html>

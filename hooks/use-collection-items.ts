@@ -4,6 +4,13 @@ import type { Collection, CollectionItemsResponse, Item } from "@/types/api";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const DEFAULT_LIMIT = 200;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// In-memory cache for stale-while-revalidate pattern (keyed by collectionId)
+const collectionItemsCache = new Map<
+  string,
+  { folders: Collection[]; items: Item[]; timestamp: number }
+>();
 
 function trackFolderView(folderId: string, folderName?: string) {
   fetch("/api/analytics/track", {
@@ -18,16 +25,27 @@ function trackFolderView(folderId: string, folderName?: string) {
 }
 
 export function useCollectionItems(collectionId: string | null) {
-  const [folders, setFolders] = useState<Collection[]>([]);
-  const [items, setItems] = useState<Item[]>([]);
+  // Initialize from cache if available
+  const getCachedData = () => {
+    if (!collectionId) return { folders: [], items: [] };
+    const cached = collectionItemsCache.get(collectionId);
+    return cached ? { folders: cached.folders, items: cached.items } : { folders: [], items: [] };
+  };
+
+  const cachedData = getCachedData();
+  const hasCachedData = collectionId ? collectionItemsCache.has(collectionId) : false;
+
+  const [folders, setFolders] = useState<Collection[]>(cachedData.folders);
+  const [items, setItems] = useState<Item[]>(cachedData.items);
   const [loadedCollectionId, setLoadedCollectionId] = useState<string | null>(
-    null,
+    hasCachedData ? collectionId : null
   );
   const [isRefreshing, setIsRefreshing] = useState(false);
   const trackedCollectionRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
 
   const fetchItems = useCallback(
-    async (forceRefresh = false) => {
+    async (forceRefresh = false, background = false) => {
       if (!collectionId) return;
 
       const params = new URLSearchParams({
@@ -44,38 +62,73 @@ export function useCollectionItems(collectionId: string | null) {
       try {
         const res = await fetch(
           `/api/collections/${collectionId}/items?${params.toString()}`,
-          { headers },
+          { headers }
         );
         if (!res.ok) throw new Error("Failed to fetch");
         const data: CollectionItemsResponse = await res.json();
 
-        setFolders(data.folders ?? []);
-        setItems(data.items ?? []);
-        setLoadedCollectionId(collectionId);
+        const newFolders = data.folders ?? [];
+        const newItems = data.items ?? [];
+
+        // Update cache
+        collectionItemsCache.set(collectionId, {
+          folders: newFolders,
+          items: newItems,
+          timestamp: Date.now(),
+        });
+
+        // Only update state if still mounted
+        if (mountedRef.current) {
+          setFolders(newFolders);
+          setItems(newItems);
+          setLoadedCollectionId(collectionId);
+        }
 
         if (trackedCollectionRef.current !== collectionId) {
           trackedCollectionRef.current = collectionId;
           trackFolderView(collectionId, data.currentFolderName);
         }
       } catch {
-        setFolders([]);
-        setItems([]);
-        setLoadedCollectionId(collectionId);
+        if (!background && mountedRef.current) {
+          setFolders([]);
+          setItems([]);
+          setLoadedCollectionId(collectionId);
+        }
       }
     },
-    [collectionId],
+    [collectionId]
   );
 
   useEffect(() => {
     if (!collectionId) return;
-    let active = true;
+    mountedRef.current = true;
 
-    fetchItems(false).finally(() => {
-      if (!active) return;
-    });
+    const cached = collectionItemsCache.get(collectionId);
+    const hasCached = cached !== undefined;
+    const isCacheStale = cached
+      ? Date.now() - cached.timestamp > CACHE_TTL
+      : true;
+
+    if (hasCached) {
+      // We have cached data - display it immediately
+      setFolders(cached.folders);
+      setItems(cached.items);
+      setLoadedCollectionId(collectionId);
+
+      // Revalidate in background if stale
+      if (isCacheStale) {
+        fetchItems(false, true);
+      }
+    } else {
+      // No cache - fetch with loading state
+      setFolders([]);
+      setItems([]);
+      setLoadedCollectionId(null);
+      fetchItems(false);
+    }
 
     return () => {
-      active = false;
+      mountedRef.current = false;
     };
   }, [collectionId, fetchItems]);
 
@@ -83,7 +136,20 @@ export function useCollectionItems(collectionId: string | null) {
   const isLoading = collectionId !== null && !isReady;
 
   const removeItem = (itemId: string) => {
-    setItems((prev) => prev.filter((item) => item.id !== itemId));
+    setItems((prev) => {
+      const newItems = prev.filter((item) => item.id !== itemId);
+      // Update cache when removing item
+      if (collectionId) {
+        const cached = collectionItemsCache.get(collectionId);
+        if (cached) {
+          collectionItemsCache.set(collectionId, {
+            ...cached,
+            items: newItems,
+          });
+        }
+      }
+      return newItems;
+    });
   };
 
   const refetch = useCallback(async () => {
@@ -91,7 +157,7 @@ export function useCollectionItems(collectionId: string | null) {
     try {
       await fetchItems(true);
     } finally {
-      setIsRefreshing(false);
+      if (mountedRef.current) setIsRefreshing(false);
     }
   }, [fetchItems]);
 

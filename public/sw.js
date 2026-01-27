@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const CACHES = {
   static: `static-${CACHE_VERSION}`,
   thumbnails: `thumbnails-${CACHE_VERSION}`,
@@ -21,10 +21,10 @@ function getConfig(pathname) {
     return { cache: CACHES.static, ttl: null };
   }
   if (/^\/api\/items\/[^/]+\/thumbnail/.test(pathname)) {
-    return { cache: CACHES.thumbnails, ttl: 86400000, maxEntries: 500 }; // 1 day
+    return { cache: CACHES.thumbnails, ttl: 86400000, maxEntries: 1000 }; // 1 day
   }
   if (pathname.startsWith("/api/collections")) {
-    return { cache: CACHES.api, ttl: 30000, maxEntries: 50 }; // 30 seconds
+    return { cache: CACHES.api, ttl: 300000, maxEntries: 50, swr: true }; // 5 minutes with stale-while-revalidate
   }
   return null;
 }
@@ -36,6 +36,28 @@ async function handleFetch(request, config, forceRefresh) {
   const isExpired =
     !cachedAt ||
     (config.ttl && Date.now() - parseInt(cachedAt, 10) > config.ttl);
+
+  // Stale-while-revalidate: return cached immediately and refresh in background
+  if (cached && config.swr && !forceRefresh) {
+    if (isExpired) {
+      // Refresh in background without blocking
+      fetch(request)
+        .then(async (response) => {
+          if (response.ok) {
+            const headers = new Headers(response.headers);
+            headers.set("sw-cached-at", Date.now().toString());
+            const timestamped = new Response(await response.blob(), {
+              status: response.status,
+              statusText: response.statusText,
+              headers,
+            });
+            cache.put(request, timestamped);
+          }
+        })
+        .catch(() => {});
+    }
+    return cached;
+  }
 
   if (cached && !isExpired && !forceRefresh) {
     return cached;

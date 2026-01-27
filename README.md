@@ -219,13 +219,14 @@ Analytics events are stored in the `analytics_events` collection:
 ```javascript
 {
   type: "folder_view" | "item_view" | "item_download" | "visitor",
-  folderId: string,      // For folder_view events
-  folderName: string,    // For folder_view events
-  itemId: string,        // For item_view and item_download events
-  itemFilename: string,  // For item_view and item_download events
-  visitorId: string,     // Hashed client identifier
+  folderId: string,       // For folder_view, item_view, and item_download events
+  folderName: string,     // For folder_view events
+  folderPath: string[],   // For item_view and item_download events (navigation path)
+  itemId: string,         // For item_view and item_download events
+  itemFilename: string,   // For item_view and item_download events
+  visitorId: string,      // Hashed client identifier
   timestamp: Date,
-  date: string           // "YYYY-MM-DD" for daily aggregation
+  date: string            // "YYYY-MM-DD" for daily aggregation
 }
 ```
 
@@ -257,11 +258,22 @@ synology-photo-platform/
 │   │   ├── reports/        # Photo reporting endpoint
 │   │   └── feedback/       # User feedback endpoint
 │   ├── admin/              # Admin dashboard pages
+│   ├── collection/         # Dynamic collection routes ([...path])
 │   ├── page.tsx            # Main gallery page
 │   └── layout.tsx          # App layout
 ├── components/             # Reusable UI components
 │   ├── admin/              # Admin dashboard components
-│   └── analytics/          # Analytics tracking components
+│   ├── analytics/          # Analytics tracking components
+│   ├── gallery/            # Gallery components (CollectionBrowser, grids, cards)
+│   ├── pwa/                # PWA components (ServiceWorker, A2HSNudge)
+│   ├── ui/                 # UI component library (Radix UI based)
+│   └── viewer/             # Photo viewer components (PhotoViewer, modals)
+├── hooks/                  # Custom React hooks
+│   ├── use-collections.ts  # Fetch root folder collections
+│   ├── use-collection-items.ts  # Fetch items for specific collection
+│   ├── use-photo-viewer.ts # Viewer state and keyboard controls
+│   ├── use-swipe-gesture.ts # Touch gesture detection
+│   └── use-pull-to-refresh.ts # Pull-to-refresh gesture
 ├── lib/                    # Core library code
 │   ├── admin/              # Admin authentication utilities
 │   ├── api/                # API utilities, filters, and rate limiting

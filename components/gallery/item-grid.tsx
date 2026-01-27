@@ -30,6 +30,7 @@ export function ItemGrid({ items, isLoading, onItemClick }: ItemGridProps) {
               thumbnailUrl={item.thumbnailUrl ?? null}
               filename={item.filename}
               onClick={() => onItemClick(index)}
+              priority={index < 9}
             />
           ))}
     </div>

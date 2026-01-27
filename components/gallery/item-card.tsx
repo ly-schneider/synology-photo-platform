@@ -9,9 +9,10 @@ type ItemCardProps = {
   thumbnailUrl: string | null;
   filename: string;
   onClick: () => void;
+  priority?: boolean;
 };
 
-export function ItemCard({ thumbnailUrl, filename, onClick }: ItemCardProps) {
+export function ItemCard({ thumbnailUrl, filename, onClick, priority = false }: ItemCardProps) {
   return (
     <button onClick={onClick} className="group relative text-left">
       <AspectRatio ratio={1} className="relative">
@@ -22,7 +23,8 @@ export function ItemCard({ thumbnailUrl, filename, onClick }: ItemCardProps) {
             fill
             sizes="(max-width: 768px) 33vw, (max-width: 1200px) 20vw, 200px"
             className="rounded-sm object-cover"
-            loading="lazy"
+            priority={priority}
+            loading={priority ? undefined : "lazy"}
             unoptimized
           />
         ) : (

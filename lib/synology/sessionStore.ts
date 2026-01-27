@@ -4,12 +4,12 @@ import type { SynologySession } from "./types";
  * Simple in-memory session store with short TTL and login mutex.
  *
  * Per-request authentication strategy:
- * - Sessions live only 5 seconds (enough for parallel API calls within one request)
+ * - Sessions live 60 seconds (reduces re-authentication on repeated requests)
  * - No Redis storage - avoids cross-IP session sharing issues with Vercel
  * - Login mutex ensures only one login happens at a time
  */
 
-const SESSION_TTL_MS = 5000; // 5 seconds
+const SESSION_TTL_MS = 60000; // 60 seconds
 
 let cachedSession: SynologySession | null = null;
 let sessionExpiresAt = 0;

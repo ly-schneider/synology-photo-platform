@@ -30,6 +30,14 @@ function CollectionPageContent({ path }: { path: string[] }) {
   const viewer = usePhotoViewerWithUrl(items, isReady);
   const currentItem =
     viewer.viewerIndex !== null ? items[viewer.viewerIndex] : null;
+  const prevItem =
+    viewer.viewerIndex !== null && viewer.viewerIndex > 0
+      ? items[viewer.viewerIndex - 1]
+      : undefined;
+  const nextItem =
+    viewer.viewerIndex !== null && viewer.viewerIndex < items.length - 1
+      ? items[viewer.viewerIndex + 1]
+      : undefined;
 
   const handleBack = () => {
     if (path.length === 1) {
@@ -71,6 +79,8 @@ function CollectionPageContent({ path }: { path: string[] }) {
           hasNext={viewer.hasNext}
           folderId={currentCollectionId}
           folderPath={path}
+          prevItem={prevItem}
+          nextItem={nextItem}
           onClose={viewer.close}
           onPrevious={viewer.goToPrevious}
           onNext={viewer.goToNext}
