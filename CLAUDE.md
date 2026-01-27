@@ -84,3 +84,10 @@ Optional:
 - `PHOTO_VISIBILITY_MODE` - Photo visibility mode: "hide" (default) or "show"
 - `NEXT_PUBLIC_TITLE`, `NEXT_PUBLIC_SHORT_TITLE` - App branding
 - `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `ADMIN_JWT_SECRET` - Enable admin dashboard (all three required)
+
+## Code Style
+
+- Minimize comments. Code should be self-documenting through clear naming and structure
+- Only add comments for non-obvious values (e.g., `// 5 minutes` for TTL constants) or complex business logic
+- Remove unnecessary comments during code changes
+- No TODO comments, JSDoc blocks, or explanatory comments for straightforward code

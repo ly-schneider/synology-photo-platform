@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const DEFAULT_LIMIT = 200;
 
-// In-memory cache for stale-while-revalidate pattern
 const collectionsCache: {
   data: Collection[] | null;
   timestamp: number;
@@ -14,7 +13,6 @@ const collectionsCache: {
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export function useCollections() {
-  // Initialize from cache for instant display
   const [collections, setCollections] = useState<Collection[]>(
     () => collectionsCache.data ?? []
   );
@@ -42,17 +40,13 @@ export function useCollections() {
         const data: CollectionsResponse = await res.json();
         const newCollections = data.data ?? [];
 
-        // Update cache
         collectionsCache.data = newCollections;
         collectionsCache.timestamp = Date.now();
 
-        // Only update state if still mounted
         if (mountedRef.current) {
           setCollections(newCollections);
         }
-      } catch {
-        // Keep existing collections on error
-      }
+      } catch {}
     },
     []
   );
@@ -65,15 +59,11 @@ export function useCollections() {
       Date.now() - collectionsCache.timestamp > CACHE_TTL;
 
     if (hasCachedData) {
-      // We already have cached data displayed
       setIsLoading(false);
-
-      // Revalidate in background if stale
       if (isCacheStale) {
         fetchCollections(false);
       }
     } else {
-      // No cache, fetch with loading state
       setIsLoading(true);
       fetchCollections(false).finally(() => {
         if (mountedRef.current) setIsLoading(false);

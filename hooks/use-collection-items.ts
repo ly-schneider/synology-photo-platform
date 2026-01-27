@@ -6,7 +6,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const DEFAULT_LIMIT = 200;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-// In-memory cache for stale-while-revalidate pattern (keyed by collectionId)
 const collectionItemsCache = new Map<
   string,
   { folders: Collection[]; items: Item[]; timestamp: number }
@@ -25,7 +24,6 @@ function trackFolderView(folderId: string, folderName?: string) {
 }
 
 export function useCollectionItems(collectionId: string | null) {
-  // Initialize from cache if available
   const getCachedData = () => {
     if (!collectionId) return { folders: [], items: [] };
     const cached = collectionItemsCache.get(collectionId);
@@ -70,14 +68,12 @@ export function useCollectionItems(collectionId: string | null) {
         const newFolders = data.folders ?? [];
         const newItems = data.items ?? [];
 
-        // Update cache
         collectionItemsCache.set(collectionId, {
           folders: newFolders,
           items: newItems,
           timestamp: Date.now(),
         });
 
-        // Only update state if still mounted
         if (mountedRef.current) {
           setFolders(newFolders);
           setItems(newItems);
@@ -110,17 +106,13 @@ export function useCollectionItems(collectionId: string | null) {
       : true;
 
     if (hasCached) {
-      // We have cached data - display it immediately
       setFolders(cached.folders);
       setItems(cached.items);
       setLoadedCollectionId(collectionId);
-
-      // Revalidate in background if stale
       if (isCacheStale) {
         fetchItems(false, true);
       }
     } else {
-      // No cache - fetch with loading state
       setFolders([]);
       setItems([]);
       setLoadedCollectionId(null);
@@ -138,7 +130,6 @@ export function useCollectionItems(collectionId: string | null) {
   const removeItem = (itemId: string) => {
     setItems((prev) => {
       const newItems = prev.filter((item) => item.id !== itemId);
-      // Update cache when removing item
       if (collectionId) {
         const cached = collectionItemsCache.get(collectionId);
         if (cached) {

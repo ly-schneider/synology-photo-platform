@@ -37,10 +37,8 @@ async function handleFetch(request, config, forceRefresh) {
     !cachedAt ||
     (config.ttl && Date.now() - parseInt(cachedAt, 10) > config.ttl);
 
-  // Stale-while-revalidate: return cached immediately and refresh in background
   if (cached && config.swr && !forceRefresh) {
     if (isExpired) {
-      // Refresh in background without blocking
       fetch(request)
         .then(async (response) => {
           if (response.ok) {

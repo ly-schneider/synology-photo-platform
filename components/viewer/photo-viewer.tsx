@@ -80,7 +80,6 @@ export function PhotoViewer({
     }
   }, [item.id, item.filename, folderId, folderPath]);
 
-  // Prefetch adjacent images for smoother navigation
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -107,15 +106,12 @@ export function PhotoViewer({
   const imageUrl = useMemo(() => {
     const baseUrl = item.downloadUrl ?? `/api/items/${item.id}/download`;
 
-    // Ensure we request the image inline so analytics don't treat views as downloads
     if (typeof window !== "undefined") {
       try {
         const url = new URL(baseUrl, window.location.origin);
         url.searchParams.set("disposition", "inline");
         return url.toString();
-      } catch {
-        // fall through to string concatenation
-      }
+      } catch {}
     }
 
     const hasDisposition = /[?&]disposition=/.test(baseUrl);
