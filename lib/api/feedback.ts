@@ -1,9 +1,18 @@
+import { ObjectId } from "mongodb";
 import { getDb } from "@/lib/mongodb/client";
 
 export type Feedback = {
   message: string;
   createdAt: string;
   userAgent: string;
+};
+
+type FeedbackDocument = Feedback & {
+  createdAtDate: Date;
+};
+
+export type StoredFeedback = FeedbackDocument & {
+  _id: ObjectId;
 };
 
 const COLLECTION_NAME = "feedback";
@@ -19,9 +28,7 @@ async function ensureIndexes(): Promise<void> {
 
   indexesEnsuring = (async () => {
     const db = await getDb();
-    const collection = db.collection<Feedback & { createdAtDate: Date }>(
-      COLLECTION_NAME,
-    );
+    const collection = db.collection<FeedbackDocument>(COLLECTION_NAME);
 
     await Promise.all([
       collection.createIndex(
@@ -43,9 +50,7 @@ async function ensureIndexes(): Promise<void> {
 export async function storeFeedback(feedback: Feedback): Promise<void> {
   await ensureIndexes();
   const db = await getDb();
-  const collection = db.collection<Feedback & { createdAtDate: Date }>(
-    COLLECTION_NAME,
-  );
+  const collection = db.collection<FeedbackDocument>(COLLECTION_NAME);
 
   const createdAtDate = new Date(feedback.createdAt);
   await collection.insertOne({ ...feedback, createdAtDate });
@@ -65,4 +70,54 @@ export async function storeFeedback(feedback: Feedback): Promise<void> {
       _id: { $in: overflow.map((doc) => doc._id) },
     });
   }
+}
+
+export type PaginatedFeedback = {
+  feedback: StoredFeedback[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+};
+
+export async function getFeedback(
+  page: number = 1,
+  limit: number = 20,
+): Promise<PaginatedFeedback> {
+  await ensureIndexes();
+  const db = await getDb();
+  const collection = db.collection<StoredFeedback>(COLLECTION_NAME);
+
+  const skip = (page - 1) * limit;
+
+  const [feedback, total] = await Promise.all([
+    collection
+      .find({})
+      .sort({ createdAtDate: -1 })
+      .skip(skip)
+      .limit(limit)
+      .toArray(),
+    collection.countDocuments(),
+  ]);
+
+  return {
+    feedback,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  };
+}
+
+export async function deleteFeedback(feedbackId: string): Promise<boolean> {
+  await ensureIndexes();
+  const db = await getDb();
+  const collection = db.collection<StoredFeedback>(COLLECTION_NAME);
+
+  if (!ObjectId.isValid(feedbackId)) {
+    return false;
+  }
+
+  const result = await collection.deleteOne({ _id: new ObjectId(feedbackId) });
+  return result.deletedCount > 0;
 }
