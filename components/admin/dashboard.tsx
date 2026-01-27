@@ -1,9 +1,9 @@
 "use client";
 
+import { AdminNav } from "@/components/admin/admin-nav";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { StatsPeriod, StatsResponse } from "@/types/analytics";
-import { HugeiconsIcon, IconSvgElement } from "@hugeicons/react";
 import {
   Download01Icon,
   EyeIcon,
@@ -12,6 +12,7 @@ import {
   LinkSquare01FreeIcons,
   UserGroupIcon,
 } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon, IconSvgElement } from "@hugeicons/react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
@@ -119,11 +120,15 @@ function PopularList({
   const [isExpanded, setIsExpanded] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
 
-  const maxValue = items.length > 0 ? Math.max(...items.map((i) => i.value)) : 0;
+  const maxValue =
+    items.length > 0 ? Math.max(...items.map((i) => i.value)) : 0;
   const hasMore = items.length > ITEMS_PER_PAGE;
 
   const displayedItems = isExpanded
-    ? items.slice(currentPage * ITEMS_PER_PAGE, (currentPage + 1) * ITEMS_PER_PAGE)
+    ? items.slice(
+        currentPage * ITEMS_PER_PAGE,
+        (currentPage + 1) * ITEMS_PER_PAGE,
+      )
     : items.slice(0, ITEMS_PER_PAGE);
 
   const totalPages = Math.ceil(items.length / ITEMS_PER_PAGE);
@@ -158,7 +163,8 @@ function PopularList({
           <>
             <div className="space-y-3">
               {displayedItems.map((item) => {
-                const percentage = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
+                const percentage =
+                  maxValue > 0 ? (item.value / maxValue) * 100 : 0;
                 const linkUrl = linkBuilder?.(item);
                 return (
                   <div key={item.id} className="group relative">
@@ -223,7 +229,9 @@ function PopularList({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+                      onClick={() =>
+                        setCurrentPage((p) => Math.min(totalPages - 1, p + 1))
+                      }
                       disabled={currentPage >= totalPages - 1}
                     >
                       Weiter
@@ -286,26 +294,17 @@ export function Dashboard() {
     fetchStats();
   }, [fetchStats]);
 
-  const handleLogout = async () => {
-    await fetch("/api/admin/logout", { method: "POST" });
-    router.push("/admin/login");
-    router.refresh();
-  };
-
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+        <AdminNav />
+
         {/* Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Übersicht der Aktivitäten
-            </p>
-          </div>
-          <Button variant="outline" size="sm" onClick={handleLogout}>
-            Abmelden
-          </Button>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Übersicht der Aktivitäten
+          </p>
         </div>
 
         {/* Period Filter */}

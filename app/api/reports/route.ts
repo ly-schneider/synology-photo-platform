@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { ApiError, handleApiError } from "@/lib/api/errors";
+import { checkRateLimit, getClientId } from "@/lib/api/rateLimit";
 import {
   StoredReport,
   addReport,
   hasRecentDuplicate,
 } from "@/lib/api/reportedItems";
-import { checkRateLimit, getClientId } from "@/lib/api/rateLimit";
 
 const RATE_LIMIT_CONFIG = {
   limit: 10,
@@ -89,12 +89,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const body = await request.json();
     const { filename } = body;
     const itemId = validateItemId(body.itemId);
-
-    const clientIp = getClientId(request);
+    const clientId = getClientId(request);
 
     const isDuplicate = await hasRecentDuplicate(
       itemId,
-      clientIp,
+      clientId,
       DUPLICATE_WINDOW_SECONDS,
     );
     if (isDuplicate) {
@@ -104,22 +103,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const sanitizedFilename = sanitizeFilename(filename);
-
     const reportId = crypto.randomUUID();
-    const report = {
-      reportId,
-      reportedAt: new Date().toISOString(),
-      userAgent: request.headers.get("user-agent") || "unknown",
-      filename: sanitizedFilename,
-    };
-
-    const now = new Date();
     const stored: StoredReport = {
       itemId,
-      clientId: clientIp,
-      report,
-      createdAt: now,
+      clientId,
+      reportId,
+      filename: sanitizeFilename(filename),
+      createdAt: new Date(),
     };
 
     await addReport(stored);

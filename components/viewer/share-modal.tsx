@@ -28,7 +28,8 @@ export function ShareModal({
     const url = new URL(baseUrl, window.location.origin);
     url.searchParams.set("_t", String(Date.now()));
     if (folderId) url.searchParams.set("folder_id", folderId);
-    if (folderPath?.length) url.searchParams.set("folder_path", folderPath.join(","));
+    if (folderPath?.length)
+      url.searchParams.set("folder_path", folderPath.join(","));
     return url.toString();
   };
 

@@ -39,7 +39,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         type: "item_view",
         itemId: sanitizeString(body.itemId, "unknown"),
         itemFilename: sanitizeString(body.itemFilename, "Unknown"),
-        folderId: body.folderId ? sanitizeString(body.folderId, "unknown") : undefined,
+        folderId: body.folderId
+          ? sanitizeString(body.folderId, "unknown")
+          : undefined,
         folderPath: body.folderPath?.map((p) => sanitizeString(p, "unknown")),
         visitorId,
       }).catch(() => {});

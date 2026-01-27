@@ -24,9 +24,12 @@ async function ensureIndexes(): Promise<void> {
     );
 
     await Promise.all([
-      collection.createIndex({ createdAtDate: 1 }, {
-        expireAfterSeconds: FEEDBACK_TTL_SECONDS,
-      }),
+      collection.createIndex(
+        { createdAtDate: 1 },
+        {
+          expireAfterSeconds: FEEDBACK_TTL_SECONDS,
+        },
+      ),
       collection.createIndex({ createdAtDate: -1 }),
     ]);
 
@@ -58,6 +61,8 @@ export async function storeFeedback(feedback: Feedback): Promise<void> {
     )
     .toArray();
   if (overflow.length > 0) {
-    await collection.deleteMany({ _id: { $in: overflow.map((doc) => doc._id) } });
+    await collection.deleteMany({
+      _id: { $in: overflow.map((doc) => doc._id) },
+    });
   }
 }

@@ -119,11 +119,7 @@ export async function checkRateLimit(
   config: RateLimitConfig,
 ): Promise<RateLimitResult> {
   const clientId = getClientId(request);
-  const { attempts, added, now } = await recordAttempt(
-    key,
-    clientId,
-    config,
-  );
+  const { attempts, added, now } = await recordAttempt(key, clientId, config);
 
   const resetAt = Math.floor(now.getTime() / 1000) + config.windowSeconds;
   const remaining = Math.max(0, config.limit - attempts.length);

@@ -153,10 +153,10 @@ You can control what content appears in the platform through several mechanisms:
 
 Control which photos are visible using the `PHOTO_VISIBILITY_MODE` environment variable:
 
-| Mode | Behavior |
-| ---- | -------- |
-| `hide` (default) | All photos are visible. Tag photos with `hide` in Synology Photos to exclude them. |
-| `show` | No photos are visible by default. Only photos tagged with `show` in Synology Photos are displayed. |
+| Mode             | Behavior                                                                                           |
+| ---------------- | -------------------------------------------------------------------------------------------------- |
+| `hide` (default) | All photos are visible. Tag photos with `hide` in Synology Photos to exclude them.                 |
+| `show`           | No photos are visible by default. Only photos tagged with `show` in Synology Photos are displayed. |
 
 This is useful for curating galleries - use `show` mode when you want to hand-pick which photos appear, or `hide` mode when you want everything visible except specific exclusions.
 
@@ -192,12 +192,12 @@ The platform includes a built-in analytics dashboard to track usage metrics. Acc
 
 #### Tracked Metrics
 
-| Metric | Description |
-| ------ | ----------- |
+| Metric              | Description                                                              |
+| ------------------- | ------------------------------------------------------------------------ |
 | **Unique Visitors** | Daily unique visitors based on hashed client identifiers (no PII stored) |
-| **Folder Views** | Number of times each folder/collection is viewed |
-| **Item Views** | Number of times each photo is viewed in the full-screen viewer |
-| **Downloads** | Number of photo downloads |
+| **Folder Views**    | Number of times each folder/collection is viewed                         |
+| **Item Views**      | Number of times each photo is viewed in the full-screen viewer           |
+| **Downloads**       | Number of photo downloads                                                |
 
 #### Dashboard Features
 

@@ -31,7 +31,10 @@ export async function validateCredentials(
   }
 
   const config = getAdminConfig();
-  return safeCompare(username, config.username) && safeCompare(password, config.password);
+  return (
+    safeCompare(username, config.username) &&
+    safeCompare(password, config.password)
+  );
 }
 
 export async function createToken(): Promise<string> {

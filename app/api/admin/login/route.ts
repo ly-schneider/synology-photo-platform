@@ -1,9 +1,9 @@
-import { isAdminEnabled } from "@/lib/admin/config";
 import {
   createToken,
   setAuthCookie,
   validateCredentials,
 } from "@/lib/admin/auth";
+import { isAdminEnabled } from "@/lib/admin/config";
 import { checkRateLimit } from "@/lib/api/rateLimit";
 import { NextRequest, NextResponse } from "next/server";
 

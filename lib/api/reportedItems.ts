@@ -7,12 +7,8 @@ const REPORT_LIST_MAX_LENGTH = 200;
 export type StoredReport = {
   itemId: string;
   clientId: string;
-  report: {
-    reportId: string;
-    reportedAt: string;
-    userAgent: string;
-    filename: string | null;
-  };
+  reportId: string;
+  filename: string | null;
   createdAt: Date;
 };
 
@@ -34,6 +30,7 @@ async function ensureIndexes(): Promise<void> {
         { expireAfterSeconds: REPORT_TTL_SECONDS },
       ),
       collection.createIndex({ itemId: 1, clientId: 1, createdAt: -1 }),
+      collection.createIndex({ reportId: 1 }, { unique: true }),
     ]);
 
     indexesEnsured = true;
@@ -109,4 +106,50 @@ export function excludeReportedItems<T extends { id: string | number }>(
   reportedIds: Set<string>,
 ): T[] {
   return items.filter((item) => !reportedIds.has(String(item.id)));
+}
+
+export type PaginatedReports = {
+  reports: StoredReport[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+};
+
+export async function getReports(
+  page: number = 1,
+  limit: number = 20,
+): Promise<PaginatedReports> {
+  await ensureIndexes();
+  const db = await getDb();
+  const collection = db.collection<StoredReport>(COLLECTION_NAME);
+
+  const skip = (page - 1) * limit;
+
+  const [reports, total] = await Promise.all([
+    collection
+      .find({})
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .toArray(),
+    collection.countDocuments(),
+  ]);
+
+  return {
+    reports,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  };
+}
+
+export async function deleteReport(reportId: string): Promise<boolean> {
+  await ensureIndexes();
+  const db = await getDb();
+  const collection = db.collection<StoredReport>(COLLECTION_NAME);
+
+  const result = await collection.deleteOne({ reportId });
+  return result.deletedCount > 0;
 }

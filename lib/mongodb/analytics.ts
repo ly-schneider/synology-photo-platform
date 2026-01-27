@@ -1,4 +1,8 @@
-import type { AnalyticsEvent, StatsPeriod, StatsResponse } from "@/types/analytics";
+import type {
+  AnalyticsEvent,
+  StatsPeriod,
+  StatsResponse,
+} from "@/types/analytics";
 import { getDb } from "./client";
 
 const COLLECTION_NAME = "analytics_events";

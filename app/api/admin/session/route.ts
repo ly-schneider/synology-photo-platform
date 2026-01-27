@@ -1,5 +1,5 @@
-import { isAdminEnabled } from "@/lib/admin/config";
 import { isAuthenticated } from "@/lib/admin/auth";
+import { isAdminEnabled } from "@/lib/admin/config";
 import { NextResponse } from "next/server";
 
 export async function GET(): Promise<NextResponse> {

@@ -70,8 +70,12 @@ export async function GET(
       const visitorId = getVisitorId(request);
       const folderId = searchParams.get("folder_id") ?? undefined;
       const folderPathParam = searchParams.get("folder_path");
-      const folderPath = folderPathParam ? folderPathParam.split(",") : undefined;
-      trackDownload(itemId, filename, visitorId, folderId, folderPath).catch(() => {});
+      const folderPath = folderPathParam
+        ? folderPathParam.split(",")
+        : undefined;
+      trackDownload(itemId, filename, visitorId, folderId, folderPath).catch(
+        () => {},
+      );
     }
 
     return new NextResponse(upstream.body, {
