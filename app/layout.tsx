@@ -18,6 +18,14 @@ export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
   title,
   applicationName: title,
+  robots: {
+    index: false,
+    follow: false,
+    googleBot: {
+      index: false,
+      follow: false,
+    },
+  },
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
