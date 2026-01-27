@@ -3,24 +3,23 @@
 import { CollectionBrowser } from "@/components/gallery/collection-browser";
 import { PhotoViewer } from "@/components/viewer/photo-viewer";
 import { useCollectionItems } from "@/hooks/use-collection-items";
-import { usePhotoViewer } from "@/hooks/use-photo-viewer";
+import { usePhotoViewerWithUrl } from "@/hooks/use-photo-viewer-with-url";
 import type { Collection } from "@/types/api";
 import { useRouter } from "next/navigation";
-import { use } from "react";
+import { Suspense, use } from "react";
 
 type CollectionPageProps = {
   params: Promise<{ path: string[] }>;
 };
 
-export default function CollectionPage({ params }: CollectionPageProps) {
+function CollectionPageContent({ path }: { path: string[] }) {
   const router = useRouter();
-  const { path } = use(params);
   const currentCollectionId = path[path.length - 1];
 
-  const { folders, items, isLoading, removeItem } =
+  const { folders, items, isLoading, isReady, removeItem } =
     useCollectionItems(currentCollectionId);
 
-  const viewer = usePhotoViewer(items.length);
+  const viewer = usePhotoViewerWithUrl(items, isReady);
   const currentItem =
     viewer.viewerIndex !== null ? items[viewer.viewerIndex] : null;
 
@@ -68,5 +67,25 @@ export default function CollectionPage({ params }: CollectionPageProps) {
         />
       )}
     </main>
+  );
+}
+
+function LoadingState() {
+  return (
+    <main className="flex-1 bg-background">
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-pulse text-muted-foreground">Laden...</div>
+      </div>
+    </main>
+  );
+}
+
+export default function CollectionPage({ params }: CollectionPageProps) {
+  const { path } = use(params);
+
+  return (
+    <Suspense fallback={<LoadingState />}>
+      <CollectionPageContent path={path} />
+    </Suspense>
   );
 }
