@@ -1,6 +1,7 @@
 "use client";
 
 import { CollectionBrowser } from "@/components/gallery/collection-browser";
+import { PullToRefreshContainer } from "@/components/gallery/pull-to-refresh-container";
 import { PhotoViewer } from "@/components/viewer/photo-viewer";
 import { useCollectionItems } from "@/hooks/use-collection-items";
 import { usePhotoViewerWithUrl } from "@/hooks/use-photo-viewer-with-url";
@@ -16,8 +17,15 @@ function CollectionPageContent({ path }: { path: string[] }) {
   const router = useRouter();
   const currentCollectionId = path[path.length - 1];
 
-  const { folders, items, isLoading, isReady, removeItem } =
-    useCollectionItems(currentCollectionId);
+  const {
+    folders,
+    items,
+    isLoading,
+    isReady,
+    isRefreshing,
+    removeItem,
+    refetch,
+  } = useCollectionItems(currentCollectionId);
 
   const viewer = usePhotoViewerWithUrl(items, isReady);
   const currentItem =
@@ -43,15 +51,17 @@ function CollectionPageContent({ path }: { path: string[] }) {
 
   return (
     <main className="flex-1 bg-background">
-      <CollectionBrowser
-        folders={folders}
-        items={items}
-        isLoading={isLoading}
-        showBackButton={true}
-        onBack={handleBack}
-        onFolderClick={handleFolderClick}
-        onItemClick={viewer.open}
-      />
+      <PullToRefreshContainer onRefresh={refetch} isRefreshing={isRefreshing}>
+        <CollectionBrowser
+          folders={folders}
+          items={items}
+          isLoading={isLoading}
+          showBackButton={true}
+          onBack={handleBack}
+          onFolderClick={handleFolderClick}
+          onItemClick={viewer.open}
+        />
+      </PullToRefreshContainer>
 
       {currentItem && (
         <PhotoViewer

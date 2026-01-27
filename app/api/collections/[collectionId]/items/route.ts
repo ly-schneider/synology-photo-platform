@@ -140,13 +140,20 @@ export async function GET(
         ? String(folderInfo.name)
         : undefined;
 
-    return NextResponse.json({
-      folders: sortedFolders,
-      items: sortedItems,
-      foldersPage: { offset, limit, total: resolvedFolderTotal },
-      page: { offset, limit, total: resolvedItemTotal },
-      currentFolderName,
-    });
+    return NextResponse.json(
+      {
+        folders: sortedFolders,
+        items: sortedItems,
+        foldersPage: { offset, limit, total: resolvedFolderTotal },
+        page: { offset, limit, total: resolvedItemTotal },
+        currentFolderName,
+      },
+      {
+        headers: {
+          "Cache-Control": "private, max-age=30, stale-while-revalidate=60",
+        },
+      },
+    );
   } catch (err) {
     return handleApiError(err);
   }

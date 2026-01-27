@@ -1,7 +1,7 @@
 "use client";
 
 import type { Collection, CollectionItemsResponse, Item } from "@/types/api";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const DEFAULT_LIMIT = 200;
 
@@ -23,22 +23,32 @@ export function useCollectionItems(collectionId: string | null) {
   const [loadedCollectionId, setLoadedCollectionId] = useState<string | null>(
     null,
   );
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const trackedCollectionRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    if (!collectionId) return;
-    let active = true;
+  const fetchItems = useCallback(
+    async (forceRefresh = false) => {
+      if (!collectionId) return;
 
-    const params = new URLSearchParams({
-      offset: "0",
-      limit: String(DEFAULT_LIMIT),
-      additional: '["thumbnail"]',
-    });
+      const params = new URLSearchParams({
+        offset: "0",
+        limit: String(DEFAULT_LIMIT),
+        additional: '["thumbnail"]',
+      });
 
-    fetch(`/api/collections/${collectionId}/items?${params.toString()}`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(res)))
-      .then((data: CollectionItemsResponse) => {
-        if (!active) return;
+      const headers: HeadersInit = {};
+      if (forceRefresh) {
+        headers["x-cache-refresh"] = "true";
+      }
+
+      try {
+        const res = await fetch(
+          `/api/collections/${collectionId}/items?${params.toString()}`,
+          { headers },
+        );
+        if (!res.ok) throw new Error("Failed to fetch");
+        const data: CollectionItemsResponse = await res.json();
+
         setFolders(data.folders ?? []);
         setItems(data.items ?? []);
         setLoadedCollectionId(collectionId);
@@ -47,18 +57,27 @@ export function useCollectionItems(collectionId: string | null) {
           trackedCollectionRef.current = collectionId;
           trackFolderView(collectionId, data.currentFolderName);
         }
-      })
-      .catch(() => {
-        if (!active) return;
+      } catch {
         setFolders([]);
         setItems([]);
         setLoadedCollectionId(collectionId);
-      });
+      }
+    },
+    [collectionId],
+  );
+
+  useEffect(() => {
+    if (!collectionId) return;
+    let active = true;
+
+    fetchItems(false).finally(() => {
+      if (!active) return;
+    });
 
     return () => {
       active = false;
     };
-  }, [collectionId]);
+  }, [collectionId, fetchItems]);
 
   const isReady = collectionId !== null && loadedCollectionId === collectionId;
   const isLoading = collectionId !== null && !isReady;
@@ -67,5 +86,22 @@ export function useCollectionItems(collectionId: string | null) {
     setItems((prev) => prev.filter((item) => item.id !== itemId));
   };
 
-  return { folders, items, isLoading, isReady, removeItem };
+  const refetch = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await fetchItems(true);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [fetchItems]);
+
+  return {
+    folders,
+    items,
+    isLoading,
+    isReady,
+    isRefreshing,
+    removeItem,
+    refetch,
+  };
 }

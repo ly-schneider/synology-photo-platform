@@ -74,10 +74,7 @@ function FeedbackRow({
         </p>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-muted-foreground">
           <span>{formatDate(feedback.createdAtDate)}</span>
-          <span
-            className="truncate max-w-[200px]"
-            title={feedback.userAgent}
-          >
+          <span className="truncate max-w-[200px]" title={feedback.userAgent}>
             {feedback.userAgent}
           </span>
         </div>

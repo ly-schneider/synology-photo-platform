@@ -74,10 +74,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         ? sortedCollections.total
         : resolvedOffset + sortedCollections.data.length;
 
-    return NextResponse.json({
-      data: sortedCollections.data,
-      page: { offset: resolvedOffset, limit: resolvedLimit, total },
-    });
+    return NextResponse.json(
+      {
+        data: sortedCollections.data,
+        page: { offset: resolvedOffset, limit: resolvedLimit, total },
+      },
+      {
+        headers: {
+          "Cache-Control": "private, max-age=30, stale-while-revalidate=60",
+        },
+      },
+    );
   } catch (err) {
     return handleApiError(err);
   }
