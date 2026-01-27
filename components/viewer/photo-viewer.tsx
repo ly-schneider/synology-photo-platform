@@ -9,7 +9,12 @@ import { ShareModal } from "./share-modal";
 import { ViewerHeader } from "./viewer-header";
 import { ViewerNavigation } from "./viewer-navigation";
 
-function trackItemView(itemId: string, itemFilename: string) {
+function trackItemView(
+  itemId: string,
+  itemFilename: string,
+  folderId?: string,
+  folderPath?: string[],
+) {
   fetch("/api/analytics/track", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -17,6 +22,8 @@ function trackItemView(itemId: string, itemFilename: string) {
       type: "item_view",
       itemId,
       itemFilename,
+      folderId,
+      folderPath,
     }),
   }).catch(() => {});
 }
@@ -26,6 +33,8 @@ type PhotoViewerProps = {
   isImageLoading: boolean;
   hasPrevious: boolean;
   hasNext: boolean;
+  folderId?: string;
+  folderPath?: string[];
   onClose: () => void;
   onPrevious: () => void;
   onNext: () => void;
@@ -38,6 +47,8 @@ export function PhotoViewer({
   isImageLoading,
   hasPrevious,
   hasNext,
+  folderId,
+  folderPath,
   onClose,
   onPrevious,
   onNext,
@@ -51,9 +62,9 @@ export function PhotoViewer({
   useEffect(() => {
     if (item.id && lastTrackedRef.current !== item.id) {
       lastTrackedRef.current = item.id;
-      trackItemView(item.id, item.filename);
+      trackItemView(item.id, item.filename, folderId, folderPath);
     }
-  }, [item.id, item.filename]);
+  }, [item.id, item.filename, folderId, folderPath]);
 
   const { touchDelta, swipeDirection, isAnimating, handlers } = useSwipeGesture(
     {
@@ -147,7 +158,12 @@ export function PhotoViewer({
       />
 
       {showShareModal && (
-        <ShareModal item={item} onClose={() => setShowShareModal(false)} />
+        <ShareModal
+          item={item}
+          folderId={folderId}
+          folderPath={folderPath}
+          onClose={() => setShowShareModal(false)}
+        />
       )}
 
       {showReportModal && (

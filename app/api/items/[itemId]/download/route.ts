@@ -68,7 +68,10 @@ export async function GET(
     const shouldTrackDownload = disposition === "attachment";
     if (shouldTrackDownload) {
       const visitorId = getVisitorId(request);
-      trackDownload(itemId, filename, visitorId).catch(() => {});
+      const folderId = searchParams.get("folder_id") ?? undefined;
+      const folderPathParam = searchParams.get("folder_path");
+      const folderPath = folderPathParam ? folderPathParam.split(",") : undefined;
+      trackDownload(itemId, filename, visitorId, folderId, folderPath).catch(() => {});
     }
 
     return new NextResponse(upstream.body, {

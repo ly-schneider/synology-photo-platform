@@ -8,6 +8,7 @@ export type AnalyticsEvent = {
   type: AnalyticsEventType;
   folderId?: string;
   folderName?: string;
+  folderPath?: string[];
   itemId?: string;
   itemFilename?: string;
   visitorId: string;
@@ -19,6 +20,7 @@ export type TrackEventRequest = {
   type: "folder_view" | "item_view";
   folderId?: string;
   folderName?: string;
+  folderPath?: string[];
   itemId?: string;
   itemFilename?: string;
 };
@@ -38,11 +40,15 @@ export type StatsResponse = {
   popularItemsByViews: Array<{
     itemId: string;
     itemFilename: string;
+    folderId: string;
+    folderPath: string[];
     views: number;
   }>;
   popularItemsByDownloads: Array<{
     itemId: string;
     itemFilename: string;
+    folderId: string;
+    folderPath: string[];
     downloads: number;
   }>;
 };

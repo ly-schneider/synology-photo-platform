@@ -59,11 +59,15 @@ export async function trackDownload(
   itemId: string,
   itemFilename: string,
   visitorId: string,
+  folderId?: string,
+  folderPath?: string[],
 ): Promise<void> {
   await trackEvent({
     type: "item_download",
     itemId,
     itemFilename,
+    folderId,
+    folderPath,
     visitorId,
   });
 }
@@ -112,12 +116,20 @@ export async function getStats(period: StatsPeriod): Promise<StatsResponse> {
       ])
       .toArray(),
     collection
-      .aggregate<{ _id: string; itemFilename: string; views: number }>([
+      .aggregate<{
+        _id: string;
+        itemFilename: string;
+        folderId: string | null;
+        folderPath: string[] | null;
+        views: number;
+      }>([
         { $match: { type: "item_view", ...matchStage } },
         {
           $group: {
             _id: "$itemId",
             itemFilename: { $first: "$itemFilename" },
+            folderId: { $first: "$folderId" },
+            folderPath: { $first: "$folderPath" },
             views: { $sum: 1 },
           },
         },
@@ -126,12 +138,20 @@ export async function getStats(period: StatsPeriod): Promise<StatsResponse> {
       ])
       .toArray(),
     collection
-      .aggregate<{ _id: string; itemFilename: string; downloads: number }>([
+      .aggregate<{
+        _id: string;
+        itemFilename: string;
+        folderId: string | null;
+        folderPath: string[] | null;
+        downloads: number;
+      }>([
         { $match: { type: "item_download", ...matchStage } },
         {
           $group: {
             _id: "$itemId",
             itemFilename: { $first: "$itemFilename" },
+            folderId: { $first: "$folderId" },
+            folderPath: { $first: "$folderPath" },
             downloads: { $sum: 1 },
           },
         },
@@ -154,11 +174,15 @@ export async function getStats(period: StatsPeriod): Promise<StatsResponse> {
     popularItemsByViews: popularItemsByViews.map((i) => ({
       itemId: i._id,
       itemFilename: i.itemFilename || "Unknown",
+      folderId: i.folderId || "",
+      folderPath: i.folderPath || [],
       views: i.views,
     })),
     popularItemsByDownloads: popularItemsByDownloads.map((i) => ({
       itemId: i._id,
       itemFilename: i.itemFilename || "Unknown",
+      folderId: i.folderId || "",
+      folderPath: i.folderPath || [],
       downloads: i.downloads,
     })),
   };

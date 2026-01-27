@@ -8,18 +8,28 @@ import { useState } from "react";
 
 type ShareModalProps = {
   item: Item;
+  folderId?: string;
+  folderPath?: string[];
   onClose: () => void;
 };
 
-export function ShareModal({ item, onClose }: ShareModalProps) {
+export function ShareModal({
+  item,
+  folderId,
+  folderPath,
+  onClose,
+}: ShareModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const platform = usePlatform();
   const isIOS = platform === "ios";
 
   const getDownloadUrl = () => {
     const baseUrl = item.downloadUrl ?? `/api/items/${item.id}/download`;
-    const separator = baseUrl.includes("?") ? "&" : "?";
-    return `${baseUrl}${separator}_t=${Date.now()}`;
+    const url = new URL(baseUrl, window.location.origin);
+    url.searchParams.set("_t", String(Date.now()));
+    if (folderId) url.searchParams.set("folder_id", folderId);
+    if (folderPath?.length) url.searchParams.set("folder_path", folderPath.join(","));
+    return url.toString();
   };
 
   const fetchBlob = async () => {

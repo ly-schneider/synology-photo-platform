@@ -9,6 +9,7 @@ import {
   EyeIcon,
   Folder01Icon,
   Image01Icon,
+  LinkSquare01FreeIcons,
   UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import { useRouter } from "next/navigation";
@@ -97,11 +98,23 @@ function PopularList({
   items,
   valueLabel,
   icon,
+  linkBuilder,
 }: {
   title: string;
-  items: Array<{ id: string; name: string; value: number }>;
+  items: Array<{
+    id: string;
+    name: string;
+    value: number;
+    folderId?: string;
+    folderPath?: string[];
+  }>;
   valueLabel: string;
   icon: IconSvgElement;
+  linkBuilder?: (item: {
+    id: string;
+    folderId?: string;
+    folderPath?: string[];
+  }) => string | null;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
@@ -146,6 +159,7 @@ function PopularList({
             <div className="space-y-3">
               {displayedItems.map((item) => {
                 const percentage = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
+                const linkUrl = linkBuilder?.(item);
                 return (
                   <div key={item.id} className="group relative">
                     <div
@@ -162,6 +176,19 @@ function PopularList({
                       <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
                         {item.value.toLocaleString("de-CH")} {valueLabel}
                       </span>
+                      {linkUrl && (
+                        <a
+                          href={linkUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0"
+                        >
+                          <HugeiconsIcon
+                            icon={LinkSquare01FreeIcons}
+                            className="h-4 w-4 text-muted-foreground hover:text-foreground transition-colors"
+                          />
+                        </a>
+                      )}
                     </div>
                   </div>
                 );
@@ -363,6 +390,7 @@ export function Dashboard() {
                 }))}
                 valueLabel="Aufrufe"
                 icon={Folder01Icon}
+                linkBuilder={(item) => `/collection/${item.id}`}
               />
               <PopularList
                 title="Beliebte Fotos (Aufrufe)"
@@ -370,9 +398,18 @@ export function Dashboard() {
                   id: i.itemId,
                   name: i.itemFilename,
                   value: i.views,
+                  folderId: i.folderId,
+                  folderPath: i.folderPath,
                 }))}
                 valueLabel="Aufrufe"
                 icon={Image01Icon}
+                linkBuilder={(item) =>
+                  item.folderPath && item.folderPath.length > 0
+                    ? `/collection/${item.folderPath.join("/")}?img=${item.id}`
+                    : item.folderId
+                      ? `/collection/${item.folderId}`
+                      : null
+                }
               />
               <PopularList
                 title="Beliebte Fotos (Downloads)"
@@ -380,9 +417,18 @@ export function Dashboard() {
                   id: i.itemId,
                   name: i.itemFilename,
                   value: i.downloads,
+                  folderId: i.folderId,
+                  folderPath: i.folderPath,
                 }))}
                 valueLabel="Downloads"
                 icon={Download01Icon}
+                linkBuilder={(item) =>
+                  item.folderPath && item.folderPath.length > 0
+                    ? `/collection/${item.folderPath.join("/")}?img=${item.id}`
+                    : item.folderId
+                      ? `/collection/${item.folderId}`
+                      : null
+                }
               />
             </div>
           </div>

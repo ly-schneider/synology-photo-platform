@@ -59,6 +59,8 @@ function CollectionPageContent({ path }: { path: string[] }) {
           isImageLoading={viewer.isImageLoading}
           hasPrevious={viewer.hasPrevious}
           hasNext={viewer.hasNext}
+          folderId={currentCollectionId}
+          folderPath={path}
           onClose={viewer.close}
           onPrevious={viewer.goToPrevious}
           onNext={viewer.goToNext}
