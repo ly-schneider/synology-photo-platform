@@ -3,26 +3,50 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { StatsPeriod, StatsResponse } from "@/types/analytics";
+import { HugeiconsIcon, IconSvgElement } from "@hugeicons/react";
+import {
+  Download01Icon,
+  EyeIcon,
+  Folder01Icon,
+  Image01Icon,
+  UserGroupIcon,
+} from "@hugeicons/core-free-icons";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 const PERIOD_OPTIONS: { value: StatsPeriod; label: string }[] = [
-  { value: "7d", label: "7 Days" },
-  { value: "30d", label: "30 Days" },
-  { value: "90d", label: "90 Days" },
-  { value: "all", label: "All Time" },
+  { value: "7d", label: "7 Tage" },
+  { value: "30d", label: "30 Tage" },
+  { value: "90d", label: "90 Tage" },
+  { value: "all", label: "Gesamt" },
 ];
 
-function StatCard({ title, value }: { title: string; value: number }) {
+function StatCard({
+  title,
+  value,
+  icon,
+}: {
+  title: string;
+  value: number;
+  icon: IconSvgElement;
+}) {
   return (
     <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="text-3xl font-bold">{value.toLocaleString()}</div>
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-muted-foreground">{title}</p>
+            <p className="text-2xl font-bold tracking-tight">
+              {value.toLocaleString("de-CH")}
+            </p>
+          </div>
+          <div className="rounded-xl bg-muted p-3">
+            <HugeiconsIcon
+              icon={icon}
+              className="h-5 w-5 text-muted-foreground"
+            />
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
@@ -31,31 +55,38 @@ function StatCard({ title, value }: { title: string; value: number }) {
 function StatCardSkeleton() {
   return (
     <Card>
-      <CardHeader className="pb-2">
-        <div className="h-4 w-24 bg-muted animate-pulse rounded" />
-      </CardHeader>
-      <CardContent>
-        <div className="h-9 w-16 bg-muted animate-pulse rounded" />
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <div className="h-4 w-20 bg-muted animate-pulse rounded" />
+            <div className="h-7 w-16 bg-muted animate-pulse rounded" />
+          </div>
+          <div className="h-11 w-11 bg-muted animate-pulse rounded-xl" />
+        </div>
       </CardContent>
     </Card>
   );
 }
 
+const ITEMS_PER_PAGE = 10;
+
 function PopularListSkeleton({ title }: { title: string }) {
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">{title}</CardTitle>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base font-semibold">{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <ul className="space-y-3">
+        <div className="space-y-2">
           {[...Array(5)].map((_, i) => (
-            <li key={i} className="flex justify-between items-center">
-              <div className="h-4 w-32 bg-muted animate-pulse rounded" />
-              <div className="h-4 w-16 bg-muted animate-pulse rounded" />
-            </li>
+            <div key={i} className="flex items-center gap-3 py-2">
+              <div className="flex-1 min-w-0">
+                <div className="h-4 w-3/4 bg-muted animate-pulse rounded" />
+              </div>
+              <div className="h-4 w-16 bg-muted animate-pulse rounded shrink-0" />
+            </div>
           ))}
-        </ul>
+        </div>
       </CardContent>
     </Card>
   );
@@ -65,32 +96,128 @@ function PopularList({
   title,
   items,
   valueLabel,
+  icon,
 }: {
   title: string;
   items: Array<{ id: string; name: string; value: number }>;
   valueLabel: string;
+  icon: IconSvgElement;
 }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+
+  const maxValue = items.length > 0 ? Math.max(...items.map((i) => i.value)) : 0;
+  const hasMore = items.length > ITEMS_PER_PAGE;
+
+  const displayedItems = isExpanded
+    ? items.slice(currentPage * ITEMS_PER_PAGE, (currentPage + 1) * ITEMS_PER_PAGE)
+    : items.slice(0, ITEMS_PER_PAGE);
+
+  const totalPages = Math.ceil(items.length / ITEMS_PER_PAGE);
+
+  const handleShowMore = () => {
+    setIsExpanded(true);
+    setCurrentPage(0);
+  };
+
+  const handleCollapse = () => {
+    setIsExpanded(false);
+    setCurrentPage(0);
+  };
+
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">{title}</CardTitle>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2">
+          <HugeiconsIcon
+            icon={icon}
+            className="h-4 w-4 text-muted-foreground"
+          />
+          <CardTitle className="text-base font-semibold">{title}</CardTitle>
+        </div>
       </CardHeader>
       <CardContent>
         {items.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No data available</p>
+          <p className="text-muted-foreground text-sm py-4 text-center">
+            Keine Daten verfügbar
+          </p>
         ) : (
-          <ul className="space-y-3">
-            {items.map((item) => (
-              <li key={item.id} className="flex justify-between items-center">
-                <span className="truncate max-w-[200px]" title={item.name}>
-                  {item.name}
-                </span>
-                <span className="text-muted-foreground text-sm">
-                  {item.value.toLocaleString()} {valueLabel}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <>
+            <div className="space-y-3">
+              {displayedItems.map((item) => {
+                const percentage = maxValue > 0 ? (item.value / maxValue) * 100 : 0;
+                return (
+                  <div key={item.id} className="group relative">
+                    <div
+                      className="absolute inset-0 bg-muted/50 rounded-lg transition-all"
+                      style={{ width: `${percentage}%` }}
+                    />
+                    <div className="relative flex items-center gap-3">
+                      <span
+                        className="flex-1 min-w-0 text-sm font-medium break-words"
+                        title={item.name}
+                      >
+                        {item.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
+                        {item.value.toLocaleString("de-CH")} {valueLabel}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Show More / Pagination Controls */}
+            {hasMore && (
+              <div className="mt-4 flex items-center justify-center gap-2">
+                {!isExpanded ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleShowMore}
+                    className="w-full"
+                  >
+                    Mehr anzeigen
+                  </Button>
+                ) : (
+                  <div className="flex items-center gap-2 w-full">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                      disabled={currentPage === 0}
+                    >
+                      Zurück
+                    </Button>
+                    <div className="flex-1 text-center text-sm text-muted-foreground">
+                      Seite {currentPage + 1} von {totalPages}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+                      disabled={currentPage >= totalPages - 1}
+                    >
+                      Weiter
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Collapse button when expanded */}
+            {isExpanded && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCollapse}
+                className="w-full mt-2 text-muted-foreground"
+              >
+                Weniger anzeigen
+              </Button>
+            )}
+          </>
         )}
       </CardContent>
     </Card>
@@ -122,7 +249,7 @@ export function Dashboard() {
       const data = await response.json();
       setStats(data);
     } catch {
-      setError("Failed to load statistics");
+      setError("Statistiken konnten nicht geladen werden");
     } finally {
       setIsLoading(false);
     }
@@ -139,92 +266,128 @@ export function Dashboard() {
   };
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Analytics Dashboard</h1>
-        <Button variant="outline" onClick={handleLogout}>
-          Logout
-        </Button>
-      </div>
-
-      <div className="flex gap-2 mb-8">
-        {PERIOD_OPTIONS.map((option) => (
-          <Button
-            key={option.value}
-            variant={period === option.value ? "default" : "outline"}
-            size="sm"
-            onClick={() => setPeriod(option.value)}
-          >
-            {option.label}
-          </Button>
-        ))}
-      </div>
-
-      {isLoading && (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <StatCardSkeleton />
-            <StatCardSkeleton />
-            <StatCardSkeleton />
-            <StatCardSkeleton />
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+        {/* Header */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Übersicht der Aktivitäten
+            </p>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <PopularListSkeleton title="Popular Folders" />
-            <PopularListSkeleton title="Popular Items (Views)" />
-            <PopularListSkeleton title="Popular Items (Downloads)" />
-          </div>
-        </>
-      )}
-
-      {error && (
-        <div className="text-center py-8">
-          <p className="text-red-600">{error}</p>
-          <Button variant="outline" onClick={fetchStats} className="mt-4">
-            Retry
+          <Button variant="outline" size="sm" onClick={handleLogout}>
+            Abmelden
           </Button>
         </div>
-      )}
 
-      {!isLoading && !error && stats && (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <StatCard title="Total Visitors" value={stats.totalVisitors} />
-            <StatCard title="Folder Views" value={stats.folderViews} />
-            <StatCard title="Item Views" value={stats.itemViews} />
-            <StatCard title="Downloads" value={stats.downloads} />
-          </div>
+        {/* Period Filter */}
+        <div className="flex flex-wrap gap-2 mb-6">
+          {PERIOD_OPTIONS.map((option) => (
+            <Button
+              key={option.value}
+              variant={period === option.value ? "default" : "outline"}
+              size="sm"
+              onClick={() => setPeriod(option.value)}
+              className="min-w-[70px]"
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <PopularList
-              title="Popular Folders"
-              items={stats.popularFolders.map((f) => ({
-                id: f.folderId,
-                name: f.folderName,
-                value: f.views,
-              }))}
-              valueLabel="views"
-            />
-            <PopularList
-              title="Popular Items (Views)"
-              items={stats.popularItemsByViews.map((i) => ({
-                id: i.itemId,
-                name: i.itemFilename,
-                value: i.views,
-              }))}
-              valueLabel="views"
-            />
-            <PopularList
-              title="Popular Items (Downloads)"
-              items={stats.popularItemsByDownloads.map((i) => ({
-                id: i.itemId,
-                name: i.itemFilename,
-                value: i.downloads,
-              }))}
-              valueLabel="downloads"
-            />
+        {/* Loading State */}
+        {isLoading && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <StatCardSkeleton />
+              <StatCardSkeleton />
+              <StatCardSkeleton />
+              <StatCardSkeleton />
+            </div>
+            <div className="space-y-4">
+              <PopularListSkeleton title="Beliebte Ordner" />
+              <PopularListSkeleton title="Beliebte Fotos (Aufrufe)" />
+              <PopularListSkeleton title="Beliebte Fotos (Downloads)" />
+            </div>
           </div>
-        </>
-      )}
+        )}
+
+        {/* Error State */}
+        {error && (
+          <Card className="border-destructive/50">
+            <CardContent className="flex flex-col items-center justify-center py-10">
+              <p className="text-destructive font-medium mb-4">{error}</p>
+              <Button variant="outline" onClick={fetchStats}>
+                Erneut versuchen
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Stats Content */}
+        {!isLoading && !error && stats && (
+          <div className="space-y-6">
+            {/* Stat Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <StatCard
+                title="Besucher"
+                value={stats.totalVisitors}
+                icon={UserGroupIcon}
+              />
+              <StatCard
+                title="Ordner-Aufrufe"
+                value={stats.folderViews}
+                icon={Folder01Icon}
+              />
+              <StatCard
+                title="Foto-Aufrufe"
+                value={stats.itemViews}
+                icon={EyeIcon}
+              />
+              <StatCard
+                title="Downloads"
+                value={stats.downloads}
+                icon={Download01Icon}
+              />
+            </div>
+
+            {/* Popular Lists */}
+            <div className="space-y-4">
+              <PopularList
+                title="Beliebte Ordner"
+                items={stats.popularFolders.map((f) => ({
+                  id: f.folderId,
+                  name: f.folderName,
+                  value: f.views,
+                }))}
+                valueLabel="Aufrufe"
+                icon={Folder01Icon}
+              />
+              <PopularList
+                title="Beliebte Fotos (Aufrufe)"
+                items={stats.popularItemsByViews.map((i) => ({
+                  id: i.itemId,
+                  name: i.itemFilename,
+                  value: i.views,
+                }))}
+                valueLabel="Aufrufe"
+                icon={Image01Icon}
+              />
+              <PopularList
+                title="Beliebte Fotos (Downloads)"
+                items={stats.popularItemsByDownloads.map((i) => ({
+                  id: i.itemId,
+                  name: i.itemFilename,
+                  value: i.downloads,
+                }))}
+                valueLabel="Downloads"
+                icon={Download01Icon}
+              />
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

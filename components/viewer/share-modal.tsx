@@ -16,10 +16,14 @@ export function ShareModal({ item, onClose }: ShareModalProps) {
   const platform = usePlatform();
   const isIOS = platform === "ios";
 
-  const imageUrl = item.downloadUrl ?? `/api/items/${item.id}/download`;
+  const getDownloadUrl = () => {
+    const baseUrl = item.downloadUrl ?? `/api/items/${item.id}/download`;
+    const separator = baseUrl.includes("?") ? "&" : "?";
+    return `${baseUrl}${separator}_t=${Date.now()}`;
+  };
 
   const fetchBlob = async () => {
-    const response = await fetch(imageUrl);
+    const response = await fetch(getDownloadUrl());
     return response.blob();
   };
 

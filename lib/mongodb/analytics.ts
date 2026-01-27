@@ -108,7 +108,7 @@ export async function getStats(period: StatsPeriod): Promise<StatsResponse> {
           },
         },
         { $sort: { views: -1 } },
-        { $limit: 10 },
+        { $limit: 50 },
       ])
       .toArray(),
     collection
@@ -122,7 +122,7 @@ export async function getStats(period: StatsPeriod): Promise<StatsResponse> {
           },
         },
         { $sort: { views: -1 } },
-        { $limit: 10 },
+        { $limit: 50 },
       ])
       .toArray(),
     collection
@@ -136,7 +136,7 @@ export async function getStats(period: StatsPeriod): Promise<StatsResponse> {
           },
         },
         { $sort: { downloads: -1 } },
-        { $limit: 10 },
+        { $limit: 50 },
       ])
       .toArray(),
   ]);
